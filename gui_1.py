@@ -31,7 +31,34 @@ def menu_bar(root):
     menuBar.add_cascade(label="Help", menu=helpMenu)
     menuBar.add_cascade(label="Debug", menu=debugMenu)
     root.config(menu=menuBar)
+
+def _quick_start_tab(parent):
+    font = ('Helvetica', 16)
+    tk.Button(parent, 
+        text="Welcome to QUANTUM! \n(Qualified Ultra Accurate Network TUnable Model)",
+        font=font).pack(pady=50)
+    # label frame for usecase control
+    var_usecase = tk.IntVar()
+    var_usecase.set(1)
+
+    lf0a = tk.LabelFrame(parent, text="use case", font=font)
+    lf0a.pack(padx=20, pady=20)
+    text="I want a fast and stable ML model with moderate accuracy."
+    text+= "\n(simple network, get a model in 30 min)"
+    tk.Radiobutton(lf0a, text=text, variable=var_usecase, value=1, font=font).pack(pady=10)
     
+    text="I need a very accurate ML model with acceptable stability."
+    text+="\n(more steps and hyper-parameters to tune)"
+    tk.Radiobutton(lf0a, text=text, variable=var_usecase, value=2, font=font).pack(pady=10)
+
+    tk.Radiobutton(lf0a, 
+        text="I am a super user, give all parameters control to me.",
+        variable=var_usecase, value=3, font=font).pack(pady=10)
+    msgTest="message/text here to explain more for each use case..."
+    tk.Message(parent, text=msgTest, width=250, font=font).pack(pady=10)
+    tk.Button(parent, text="Next", font=font).pack(pady=10)
+
+
 def _dataprep_gui(parent):
     lf1a = tk.LabelFrame(parent, text="Necessary Input")
     lf1a.pack(padx=20, pady=5, fill='both')
@@ -219,23 +246,27 @@ def _train_gui(parent):
 
 def main():
     root = tk.Tk()
-    root.title("MLResist GUI Mockup:1024x768")
+    root.title("REML GUI Mockup:1024x768")
     root.geometry("1024x768")
+    #root.option_add("*Font", "courier 10")
     
     tab_parent = ttk.Notebook(root)
+    tab0 = ttk.Frame(tab_parent)
     tab1 = ttk.Frame(tab_parent)
     tab2 = ttk.Frame(tab_parent)
     tab3 = ttk.Frame(tab_parent)
     tab4 = ttk.Frame(tab_parent)
     tab5 = ttk.Frame(tab_parent)
     
+    tab_parent.add(tab0, text="Quick Start")
     tab_parent.add(tab1, text="Data Preparation")
     tab_parent.add(tab2, text="Single ML Training")
     tab_parent.add(tab3, text="Result Check and Model Export")    
     tab_parent.add(tab4, text="Advanced ML Training (HP Tuner)")
     tab_parent.add(tab5, text="Misc")
     tab_parent.pack(expand=1, fill='both')
-    
+   
+    _quick_start_tab(tab0)
     _dataprep_gui(tab1)
     _train_gui(tab2)
 
