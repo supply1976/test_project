@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 import tkinter as tk
 from tkinter import ttk
-import tkFont
+import tkinter.font as tkfont
 
 
 def openfile():
@@ -14,34 +15,30 @@ def menu_bar(root):
     fileMenuItems.add_command(label="Save", command=openfile)
     fileMenuItems.add_command(label="Save As", command=openfile)
     fileMenuItems.add_command(label="Close", command=openfile)
-    fileMenuItems.add_command(label="Quit", command=root.quit)
-    
+    fileMenuItems.add_command(label="Quit", command=root.quit)    
     editMenu = tk.Menu(menuBar, tearoff=0)
     editMenu.add_command(label="Cut")
     editMenu.add_command(label="Copy")
     editMenu.add_command(label="Paste")
-    
     helpMenu = tk.Menu(menuBar, tearoff=0)
     helpMenu.add_command(label="About")
-
     debugMenu = tk.Menu(menuBar)
     debugMenu.add_command(label="Debug Mode")
-
     menuBar.add_cascade(label="File", menu=fileMenuItems)
     menuBar.add_cascade(label="Edit", menu=editMenu)
     menuBar.add_cascade(label="Help", menu=helpMenu)
     menuBar.add_cascade(label="Debug", menu=debugMenu)
     root.config(menu=menuBar)
 
+
 def _quick_start_tab(parent):
-    font = (14)
+    font = ('14')
     tk.Button(parent, 
-        text="Welcome to QUANTUM! \n(Qualified Ultra Accurate Network TUnable Model)",
+        text="Welcome to QUANTUM! \n(Qualified Ultra Accurate Network TUnable Model)", 
         font=font).pack(pady=50)
     # label frame for usecase control
     var_usecase = tk.IntVar()
     var_usecase.set(1)
-
     lf0a = tk.LabelFrame(parent, text="use case", font=font)
     lf0a.pack(padx=20, pady=20)
     text="I want to start from optical or simple resist model. Quickly get an"
@@ -62,7 +59,7 @@ def _quick_start_tab(parent):
 
 
 def _CD_data_option():
-    font = tkFont.Font(underline=1)
+    font = tkfont.Font(underline=1)
     top = tk.Toplevel()
     lf1b = tk.LabelFrame(top, text="CD Data Options")
     lf1b.pack(padx=20, pady=5, fill='both')
@@ -81,7 +78,7 @@ def _CD_data_option():
         row=2, column=2, padx=10, sticky='w')
     
 def _contour_data_option():
-    font = tkFont.Font(underline=1)
+    font = tkfont.Font(underline=1)
     top = tk.Toplevel()
     # label frame 1c for contour data support
     lf1c = tk.LabelFrame(top, text="Contour Data Options")
@@ -107,9 +104,8 @@ def _contour_data_option():
     tk.Entry(lf1c).grid(row=4, column=1, padx=5, sticky='w')
     
 
-
 def _advanced_set():
-    font = tkFont.Font(underline=1)
+    font = tkfont.Font(underline=1)
     # label frame 1e for advanced setting (should hide from common users)
     top = tk.Toplevel()
     lf1e = tk.LabelFrame(top, text="Advanced Settings", font="bold")
@@ -130,8 +126,8 @@ def _advanced_set():
 
 
 
-def _dataprep_gui(parent):
-    font = tkFont.Font(underline=1)
+def _dataprep_tab(parent):
+    font = tkfont.Font(underline=1)
     lf1a = tk.LabelFrame(parent, text="Input Data", font="bold")
     lf1a.pack(padx=20, pady=5, fill='both')
     #ltext="Model File (Choose your initial model for ResistML, amdl is supported only)"
@@ -238,7 +234,7 @@ def _network_cfg():
 
 def _train_options():
     top = tk.Toplevel()
-    font = tkFont.Font(underline=1)
+    font = tkfont.Font(underline=1)
     lfto = tk.LabelFrame(top, text="optional setting")
     lfto.pack(padx=20, pady=5, fill='both')
     tk.Label(lfto, text="Anchor Gauge Names", font=font).grid(row=0, column=0, padx=5)
@@ -264,8 +260,8 @@ def _train_options():
 
 
 
-def _train_gui(parent):
-    font = tkFont.Font(underline=1)
+def _training_tab(parent):
+    font = tkfont.Font(underline=1)
     lf2a = tk.LabelFrame(parent, text="Training", font="bold")
     lf2a.pack(padx=20, pady=10, fill='both')
     tk.Label(lf2a, text="Gauge CD Data (.npz)", font=font).grid(row=0, column=0)
@@ -317,7 +313,7 @@ def _train_gui(parent):
 
 
 def _model_check_export_tab(parent):
-    font = tkFont.Font(underline=1)
+    font = tkfont.Font(underline=1)
     lf3a = tk.LabelFrame(parent, text="Check Train", font="bold")
     lf3a.pack(padx=20, pady=10, fill='both')
     tk.Label(lf3a, text="Trained Job Folder", font=font).grid(row=0, column=0)
@@ -325,8 +321,8 @@ def _model_check_export_tab(parent):
     #tk.Button(lf2a, text="Browse").grid(row=0, column=2, padx=5, sticky='w')
     
 
-def _misc(parent):
-    font = tkFont.Font(underline=1)
+def _misc_tab(parent):
+    font = tkfont.Font(underline=1)
     lf5a = tk.LabelFrame(parent, text="Utilities", font="bold")
     lf5a.pack(padx=20, pady=10, fill='both')
     tk.Label(lf5a, text="put some utilities here", font="bold").pack()
@@ -358,10 +354,10 @@ def main():
     tab_parent.pack(expand=1, fill='both')
    
     _quick_start_tab(tab0)
-    _dataprep_gui(tab1)
-    _train_gui(tab2)
+    _dataprep_tab(tab1)
+    _training_tab(tab2)
     #_model_check_export_tab(tab3)
-    _misc(tab5)
+    _misc_tab(tab5)
 
     menu_bar(root)    
     root.mainloop()
