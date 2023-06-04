@@ -45,7 +45,7 @@ class TileBlock:
     return block
 
 
-def create_random_pattern(block_size, num_blocks, min_rec_size, random_empty=False):
+def create_random_pattern(block_size, num_blocks, min_rec_size, periodic=True, random_empty=False):
   tb = TileBlock(block_size)
   blocks=[]
   for i in range(num_blocks):
@@ -57,26 +57,28 @@ def create_random_pattern(block_size, num_blocks, min_rec_size, random_empty=Fal
       _block.append(block)
     blocks.append(_block)
   p = np.block(blocks)
+  if periodic:
+    p = np.tile(blocks[0][0], (num_blocks, num_blocks))
   return p
 
 
 # example
-fig, axes = plt.subplots(nrows=2, ncols=2)
+fig, axes = plt.subplots(nrows=2, ncols=4)
 axes = axes.flatten()
 
-p1 = create_random_pattern(block_size=(32,32), min_rec_size=(8,4), num_blocks=4)
-p2 = create_random_pattern(block_size=(32,32), min_rec_size=(8,4), num_blocks=4)
-p3 = create_random_pattern(block_size=(32,32), min_rec_size=(4,8), num_blocks=4)
-p4 = create_random_pattern(block_size=(32,32), min_rec_size=(4,8), num_blocks=4)
+p1 = create_random_pattern(block_size=(32,32), min_rec_size=(16,4), num_blocks=4)
+p2 = create_random_pattern(block_size=(32,32), min_rec_size=(16,4), num_blocks=4)
+p3 = create_random_pattern(block_size=(32,32), min_rec_size=(4,16), num_blocks=4)
+p4 = create_random_pattern(block_size=(32,32), min_rec_size=(4,16), num_blocks=4)
 
-p=[p1, p2, p3, p4]
+p = [p1, p2, p3, p4]
 
-for i in range(4):
+for i in range(len(p)):
   #axes[i].pcolormesh(p[i])
   axes[i].imshow(p[i], interpolation='none')
   axes[i].set_aspect('equal')
 
-p = np.block([[p1, p2], [p3, p4]])
+#p = np.block([[p1, p2], [p3, p4]])
 #im = Image.fromarray(p*255, 'L')
 #im.save('random_pattern.jpg')
 plt.tight_layout()
@@ -89,9 +91,10 @@ img_dir = 'test_patterns'
 if not os.path.isdir(img_dir):
   os.mkdir(img_dir)
 
+
 for i in range(100):
   img_name = os.path.join(img_dir, 'test_'+str(i+1).zfill(4)+'.jpg')
-  p = create_random_pattern(block_size=(32,32), num_blocks=4, min_rec_size=(4,4))
+  p = create_random_pattern(block_size=(32,32), num_blocks=4, min_rec_size=(16,4), periodic=True)
   im = Image.fromarray(p*255, 'L')
   im.save(img_name)
   images.append(p)
