@@ -184,14 +184,13 @@ def _makeSymConvKern(inputKernel4D, mode='XYTU'):
 class SymConv2D(keras.layers.Conv2D):
   def __init__(self, **kwargs):
     super(SymConv2D, self).__init__(**kwargs)
-    #self.mylayer = keras.layers.Lambda(function=_makeSymConvKern)
 
   def call(self, inp):
     # overwrite the call method
     self.sym_kern = _makeSymConvKern(self.kernel, mode='XYTU')
-    #self.sym_kern = self.mylayer(self.kernel)
     actf_name = self.get_config()['activation']
-    output = tf.nn.conv2d(inp, self.sym_kern, strides=[1,1,1,1], padding='VALID')
+    padding = self.padding.upper()
+    output = tf.nn.conv2d(inp, self.sym_kern, strides=[1,1,1,1], padding=padding)
     if self.use_bias:
       output = tf.nn.bias_add(output, self.bias)
     if actf_name=='linear':
@@ -215,16 +214,14 @@ def get_model_kernels(model):
   print(model.layers)
   kernels = []
   for ly in model.layers[1:-1]:
-    #_kern = ly.kernel
-    _kern = ly.sym_kern
-    print(_kern)
-    print(tf.shape(_kern))
-    h, w, ic, oc = _kern.shape.as_list()
-    _kern = tf.reshape(_kern, [h, w, ic*oc])
-    _kern = tf.transpose(_kern, perm=[2, 0, 1])
-    kernels.append(_kern)
+    orig_kern = ly.kernel
+    symm_kern = _makeSymConvKern(orig_kern).numpy()
+    h, w, ic, oc = symm_kern.shape
+    symm_kern = symm_kern.reshape([h, w, ic*oc])
+    symm_kern = np.transpose(symm_kern, [2, 0, 1])
+    print([(np.sum(np.abs(k)), np.sum(k)) for k in symm_kern])
+    kernels.append(symm_kern)
   return kernels
-
 
 
 def image_pool(batch=10, pixel=51, grain=4, show_images=False):
@@ -243,15 +240,14 @@ def image_pool(batch=10, pixel=51, grain=4, show_images=False):
 def build_model(ksizes, channels):
   x = keras.Input(shape=[None, None, 1])
   outputs = [x]
-
   for k, c in zip(ksizes, channels):
     _y = SymConv2D(
       kernel_size=k, 
       filters=c, 
       activation='sigmoid', 
-      kernel_regularizer=keras.regularizers.L2(1e-4))(outputs[-1])
+      kernel_initializer='glorot_uniform',
+      kernel_regularizer=keras.regularizers.L1(0.001))(outputs[-1])
     outputs.append(_y)
-
   y_final = keras.layers.Conv2D(kernel_size=1, filters=1, name='final')(outputs[-1])
   model = keras.Model(inputs=x, outputs=y_final)
   return model
@@ -260,45 +256,39 @@ def build_model(ksizes, channels):
 def unit_test():
   input_images = image_pool(batch=100)
   _, img_size, _, _ = input_images.shape
-  ksizes = [11,11,11]
-  channels = [2, 2, 2]
+  ksizes = [31]
+  channels = [4]
   target_size = img_size - np.sum(ksizes) + len(ksizes)
   center = img_size//2
   s1 = center-target_size//2
   s2 = center+target_size//2 + 1
   target_images = input_images[:, s1:s2, s1:s2, :]
+  
   model = build_model(ksizes, channels)
   model.summary()
-  #model.compile(optimizer='adam', loss='mse')
+  model.compile(optimizer='adam', loss='mse')
 
-  #model_kernels = get_model_kernels(model)
-  #print(model_kernels[0])
-  #return 0
-  #for mk in model_kernels:
-  #  fig, axes = plt.subplots(nrows=1, ncols=len(mk))
-  #  for i in range(len(mk)):
-  #    axes[i].imshow(mk[i])
-  for ly in model.layers[1:-1]:
-    print(ly)
-    print(ly.sym_kern)
-    skern = ly.sym_kern
-    #skern = ly.kernel
-    print(tf.shape(skern))
-
-  return 0
+  # see model kernels befor training
+  model_kernels = get_model_kernels(model)
+  for mk in model_kernels:
+    fig, axes = plt.subplots(nrows=1, ncols=len(mk))
+    for i in range(len(mk)):
+      axes[i].imshow(mk[i])
+  
   model.fit(
     x=input_images,
     y=target_images,
     batch_size=32,
     verbose=1,
-    epochs=200,
+    epochs=100,
     validation_split=0.2)
 
-  #model_kernels = get_model_kernels(model)
-  #for mk in model_kernels:
-  #  fig, axes = plt.subplots(nrows=1, ncols=len(mk))
-  #  for i in range(len(mk)):
-  #    axes[i].imshow(mk[i])
+  # see model kernels after training
+  model_kernels = get_model_kernels(model)
+  for mk in model_kernels:
+    fig, axes = plt.subplots(nrows=1, ncols=len(mk))
+    for i in range(len(mk)):
+      axes[i].imshow(mk[i])
 
   # prepare test images with different pixel size and check the model prediction (inference)
   test_images = image_pool(batch=5, pixel=73)
@@ -318,8 +308,8 @@ def unit_test():
 def main():
   #image_pool(show_images=True)
   unit_test()
-  #plt.tight_layout()
-  #plt.show()
+  plt.tight_layout()
+  plt.show()
 
 
 if __name__=="__main__":
