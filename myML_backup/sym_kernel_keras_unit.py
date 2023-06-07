@@ -223,18 +223,19 @@ def get_model_kernels(model):
     kernels.append(symm_kern)
   return kernels
 
-
-def image_pool(batch=10, pixel=51, grain=4, show_images=False):
-  # virtual data gen for unit_test
-  # can check the symmetric kernel conv2d working correctly or not
-  sigma = np.exp(np.random.rand(batch, 2)+3)
-  tp = np.linspace(-grain*pixel//2, grain*pixel//2, pixel)
-  X, Y = np.meshgrid(tp, tp)
-  images = np.array([np.exp(-(X/sx)**2 -(Y/sy)**2 -(X*Y/(sx*sy))) for (sx, sy) in sigma])
-  print(images.shape)
-  if show_images:
-    plot_images(images)
-  return np.expand_dims(images, axis=-1)
+class ImageDataGen:
+    def __init__(self, batch_size=10, img_size=101, grain_size=4.0):
+        self.batch_size = batch_size
+        self.img_size = img_size       # pixel
+        self.grain_size = grain_size   # nano-meter
+        self.test_points = np.linspace(-(self.img_size//2), self.img_size//2, self.img_size)
+        self.test_points = self.grain_size * self.test_points
+        self.X, self.Y = np.meshgrid(self.test_points, self.test_points)
+        
+    def sincos(self):
+        _pitch = (400.0-100.0) * np.random.rand(self.batch_size, 2) + 100.0
+        z = [np.sin(2*np.pi*(self.X/px)) * np.cos(2*np.pi*(self.Y/py)) for (px, py) in _pitch]
+        return np.array(z)**2
 
 
 def build_model(ksizes, channels):
@@ -306,10 +307,20 @@ def unit_test():
 
 
 def main():
-  #image_pool(show_images=True)
-  unit_test()
+  imglib = ImageDataGen()
+  img = imglib.sincos()
+  b, h, w = img.shape
+  fig, axes = plt.subplots(nrows=2, ncols=5, figsize=(10,4))
+  axes = axes.flatten()
+  for i in range(10):
+    axes[i].imshow(img[i])
+    axes[i].axis('off')
   plt.tight_layout()
   plt.show()
+  #image_pool(show_images=True)
+  #unit_test()
+  #plt.tight_layout()
+  #plt.show()
 
 
 if __name__=="__main__":
