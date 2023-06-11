@@ -210,6 +210,17 @@ class SymConv2D(keras.layers.Conv2D):
             return None
 
 
+class DeltaConv2D(keras.layers.Layer):
+    def __init__(self, pad_w, inp_ch, out_ch, **kwargs):
+        super(DeltaConv2D, self).__init__(**kwargs)
+        kdelta = np.ones([1, 1, inp_ch, out_ch])
+        kdelta = np.pad(kdelta, pad_width=[(pad_w, pad_w), (pad_w, pad_w), (0,0), (0,0)])
+        self.kdelta = tf.constant(kdelta, tf.float32)
+
+    def call(self, inputs):
+        return tf.nn.conv2d(inputs, self.kdelta, strides=[1,1,1,1], padding='VALID')
+
+
 def get_net_code(k, c):
     k = map(str, k)
     c = map(str, c)
@@ -233,14 +244,9 @@ def resNetBlock(
         """
         inp_ch = inputs.shape[3]
         out_ch = channels[-1]
-        _pad = (sum(kernels)-len(kernels)+1)//2
-        # create delta-function 4D kernel
-        kdelta = np.ones([1, 1, inp_ch, out_ch])
-        kdelta = np.pad(kdelta, pad_width=[(_pad,_pad), (_pad,_pad), (0,0), (0,0)])
-        kdetla = tf.constant(kdelta, tf.float32)
-        # conv with delta kernel to resize inputs with correct (height, width) 
-        x = tf.nn.conv2d(inputs, kdelta, strides=[1,1,1,1], padding='VALID', name="x")
-        
+        pad_w = (sum(kernels)-len(kernels)+1)//2
+        x = DeltaConv2D(pad_w=pad_w, inp_ch=inp_ch, out_ch=out_ch)(inputs)
+
         residual = inputs 
         for (k, c) in zip(kernels, channels):
             residual = SymConv2D(
@@ -254,45 +260,55 @@ def resNetBlock(
     return apply
 
 
-def build_model(img_size, regL2, actf):
+def build_model(regL2, actf, img_size=None):
     image_input = keras.Input(shape=(img_size, img_size, 1), name="image_input")
-    x = resNetBlock([21, 41], [4, 2], 'XY', regL2, actf)(image_input)
-    x = resNetBlock([31, 51], [4, 2], 'XY', regL2, actf)(x)
-    x = resNetBlock([31, 31, 1], [2, 4, 1], 'XY', regL2, actf)(x)
+    #x = resNetBlock([7, 5, 3], [16, 16, 16], 'XY', regL2, actf)(image_input)
+    #x = resNetBlock([7, 5, 3], [16, 16, 16], 'XY', regL2, actf)(x)
+    #x = resNetBlock([7, 5, 3], [8, 8, 8], 'XY', regL2, actf)(x)
+    #x = resNetBlock([7, 5, 3, 3], [8, 8, 8, 1], 'XY', regL2, actf)(x)
+    x = resNetBlock([61, 51, 41], [8, 4, 4], 'XY', regL2, actf)(image_input)
+    x = resNetBlock([31, 21,  1], [2, 2, 1], 'XY', regL2, actf)(x)
     model = keras.Model(inputs=image_input, outputs=x, name="mynet")
     return model
 
 
 
 def main():
-  parser = argparse.ArgumentParser()
-  parser.add_argument('--database', type=str, default=None)
-  parser.add_argument('--asd', type=str, default=None)
-  parser.add_argument('--learning_rate', type=float, default=0.001)
-  parser.add_argument('--l2', type=float, default=0.0001)
-  parser.add_argument('--epochs', type=int, default=50)
-  parser.add_argument('--grain_size', type=float, default=8.0)
-  parser.add_argument('--threshold', type=float, default=0.3988341)
-  parser.add_argument('--batch_size', type=int, default=128)
-  parser.add_argument('--kernels', nargs='+', type=int, default=[21, 31, 41])
-  parser.add_argument('--channels', nargs='+', type=int, default=[2, 2, 2])
-  parser.add_argument('--show_step', type=int, default=10)
-  parser.add_argument('--valid_step', type=int, default=50)
-  parser.add_argument('--output_dir', type=str, default='train_outputs')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--database', type=str, default=None)
+    parser.add_argument('--asd', type=str, default=None)
+    parser.add_argument('--learning_rate', type=float, default=0.001)
+    parser.add_argument('--l2', type=float, default=0.0001)
+    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--grain_size', type=float, default=8.0)
+    parser.add_argument('--threshold', type=float, default=0.3988341)
+    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--kernels', nargs='+', type=int, default=[21, 31, 41])
+    parser.add_argument('--channels', nargs='+', type=int, default=[2, 2, 2])
+    parser.add_argument('--show_step', type=int, default=10)
+    parser.add_argument('--valid_step', type=int, default=50)
+    parser.add_argument('--output_dir', type=str, default='train_outputs')
 
-  FLAGS, _ = parser.parse_known_args()
-  net_code = get_net_code(FLAGS.kernels, FLAGS.channels)
-  workdir = 'cnn-'+net_code
+    FLAGS, _ = parser.parse_known_args()
+    net_code = get_net_code(FLAGS.kernels, FLAGS.channels)
+    workdir = 'cnn-'+net_code
 
-  if not os.path.isdir(FLAGS.output_dir):
-    os.mkdir(FLAGS.output_dir)
+    if not os.path.isdir(FLAGS.output_dir):
+        os.mkdir(FLAGS.output_dir)
+
+    model = build_model(
+        regL2=0.0001,
+        actf=keras.activations.sigmoid)
+
+    model.summary()
+
+    tot_kerns = 0
+    for ly in model.layers[1:-1]:
+        if "sym_conv2d" in ly.name:
+            _, _, ic, oc = ly.kernel.shape
+            tot_kerns = tot_kerns + ic*oc
+    print(tot_kerns)
   
-  model = build_model(
-          img_size=205,
-          regL2=0.0001,
-          actf=keras.activations.sigmoid)
-
-  model.summary()
   
 
 
