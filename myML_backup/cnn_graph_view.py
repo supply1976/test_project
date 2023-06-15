@@ -16,7 +16,7 @@ class MyDraw(tk.Frame):
 
     
     def draw_input_node(self, x0, y0, dr, input_text, 
-        out_len, out_wdith, out_dir):
+        out_len, out_width, out_dir):
         """
         """
         self.canvas.create_oval(x0-dr, y0-dr, x0+dr, y0+dr, fill='black')
@@ -28,13 +28,14 @@ class MyDraw(tk.Frame):
             x1, y1 = x0, y0+dr+out_len
         elif out_dir=='n':
             x1, y1 = x0, y0-dr-out_len
-        else
+        else:
             x1, y1 = x0, y0
+        self.canvas.create_line(x0, y0, x1, y1, width=out_width)
         return (x1, y1)
 
         
-    def draw_conv2d_block(self, x0, y0, size, text, 
-        out_len, out_width, out_dir):
+    def draw_conv2d_block(self, x0, y0, size=50, text='Conv2D', 
+        out_len=20, out_width=4, out_dir='s'):
         """
         ul: upper-left
         lr: lower-right
@@ -61,7 +62,7 @@ class MyDraw(tk.Frame):
         xc, yc = (ulx+lrx)//2, (uly+lry)//2
         self.canvas.create_rectangle(ulx, uly, lrx, lry)
         self.canvas.create_text(xc, yc, text=text)
-        self.canvas.create_line(x1, y1, x2, y2, width=width)
+        self.canvas.create_line(x1, y1, x2, y2, width=out_width)
         return (x2, y2)
 
         
@@ -139,7 +140,18 @@ if __name__=="__main__":
     root = tk.Tk()
     root.title("")
     mydraw = MyDraw(root)
+    
+    x0, y0 = 100, 50
+    x1, y1 = mydraw.draw_input_node(x0, y0, dr=3, 
+        input_text="",
+        out_len=30,
+        out_width=1,
+        out_dir='s')
+    for _ in range(6):
+        x1, y1 = mydraw.draw_conv2d_block(x1, y1)
+   
 
+    """
     flowdir = 'y'
 
     x0, y0 = 150, 50
@@ -184,7 +196,6 @@ if __name__=="__main__":
     
     
     
-    """
     x0, y0 = 300, 150
     mydraw.canvas.create_text(x0, y0-30, text='resNetBlock', anchor='nw')
     mydraw.canvas.create_oval(x0-5, y0-5, x0+5, y0+5, fill='black')
