@@ -10,8 +10,13 @@ class MyDraw(tk.Frame):
         super(MyDraw, self).__init__(master)
         self.width = width
         self.height = height
-        self.canvas = tk.Canvas(self, bg='#ffffff', 
-            width=self.width, height=self.height)
+        self.canvas = tk.Canvas(self, bg='white', width=width, height=height, 
+            scrollregion=(0,0,height,width))
+        self.scrollY = tk.Scrollbar(self, orient='vertical')
+        self.scrollY.pack(side='right', fill='y')
+        self.scrollY.config(command=self.canvas.yview)
+        self.canvas.config(yscrollcommand=self.scrollY.set)
+        
         self.canvas.pack()
         self.pack()
         self.colors = list('123456789abcde')
@@ -88,7 +93,8 @@ class MyDraw(tk.Frame):
         self.canvas.create_rectangle(ulx, uly, lrx, lry)
         self.canvas.create_text(xc, yc, text=text)
         if actf:
-            self.canvas.create_line(xc-10, yc+20, xc, yc+20, xc+10, yc+10, width=1, fill='blue')
+            self.canvas.create_line(
+                xc-10, yc+20, xc, yc+20, xc+10, yc+10, width=1, fill='blue')
             #self.canvas.create_line(xc, yc+20, xc+10, yc+10, width=1, fill='blue')
         #self.canvas.create_line(x1, y1, x2, y2, width=out_width)
         self.draw_multi_lines(x1, y1, x2, y2, width=out_width, out_dir=out_dir)
@@ -132,7 +138,7 @@ class MyDraw(tk.Frame):
         x8, y8 = self.draw_conv2d_block(xf, yf, out_dir=flowdir, size=20, text='1x1', out_len=40, out_width=1)
         # output node
         flowdir = 'n' if flowdir=='s' else flowdir
-        self.draw_node(x8, y8, dr=3, text="final output", out_len=0, out_width=1, out_dir=flowdir)
+        self.draw_node(x8, y8, dr=3, text="final output", out_len=10, out_width=1, out_dir='w')
         #mydraw.draw_skip_arc(x0, y0+15, x8, y8-15, dr=70, ifdash=True, out_dir='n')
 
 
@@ -198,7 +204,7 @@ class MyDraw(tk.Frame):
         # conv2d layers
         coords=[(x1, y1)]
         for i in range(num_conv):
-            xf, yf = self.draw_conv2d_block(*coords[-1], actf=True, out_dir=flowdir)
+            xf, yf = self.draw_conv2d_block(*coords[-1], actf=False, out_dir=flowdir)
             if i==num_conv-1:
                 self.draw_multi_lines(xf, yf, xf+100, yf, out_dir='e', width=3)
             else:
@@ -213,7 +219,11 @@ class MyDraw(tk.Frame):
         # create equal number of 1x1 layers as num_conv
         xf, yf = (xf+100, yf-40)
         for j in range(num_conv):
-            xf, yf = self.draw_conv2d_block(xf, yf, out_dir='n', size=20, text='1x1', out_len=50, out_width=1)
+            if j==num_conv-1:
+                w=1
+            else:
+                w=3
+            xf, yf = self.draw_conv2d_block(xf, yf, out_dir='n', actf=True, size=20, text='1x1', out_len=50, out_width=w)
             coords.append((xf, yf))
         #for j in range(1, num_conv):
         #    self.draw_skip_arc(*coords[j], *coords[2*num_conv-j], dr=100-j*10, st=0, ext=180, out_dir='e')
@@ -222,13 +232,15 @@ class MyDraw(tk.Frame):
         #self.draw_skip_arc(*coords[4], *coords[-5], dr=70, st=0, ext=180, out_dir='e')
         #self.draw_skip_arc(*coords[5], *coords[-6], dr=60, st=0, ext=180, out_dir='e')
         # output node
-        self.draw_node(xf, yf, dr=3, text="final output", out_len=10, out_width=1, out_dir='s')   
+        self.draw_node(xf, yf, dr=5, text="final output", out_len=10, out_width=1, out_dir='s')   
 
 if __name__=="__main__":
     root = tk.Tk()
     root.title("")
-    mydraw = MyDraw(root, height=1200, width=1600)
-
+    root.geometry('1600x900')
+    
+    mydraw = MyDraw(root, height=1600, width=1600)
+    
     # simple cnn, no skip
     mydraw.canvas.create_text(40, 40, text="simple CNN, no skip",  anchor='nw', font=16)
     mydraw.cnn(x0=150, y0=100, skips=None, num_conv=6, flowdir='e')
@@ -237,10 +249,14 @@ if __name__=="__main__":
     mydraw.canvas.create_text(40, 180, 
         text="sequantial resNet CNN, 2 or 3 Conv2D() form a resNetBlock",  anchor='nw', font=16)
     mydraw.cnn(x0=150, y0=240, skips=2, num_conv=6, flowdir='e')
-    mydraw.cnn(x0=800, y0=240, skips=3, num_conv=6, flowdir='e')
+    mydraw.cnn(x0=800, y0=240, skips=2, num_conv=6, flowdir='e')
+    mydraw.draw_skip_arc(903, 240, 1043, 240, dr=60, out_dir='e', st=0, ext=180)
+    mydraw.draw_skip_arc(1043, 240, 1183, 240, dr=60, out_dir='e', st=0, ext=180)
+    mydraw.draw_skip_arc(1183, 240, 1300, 240, dr=60, out_dir='e', st=0, ext=180)
+    #mydraw.cnn(x0=800, y0=240, skips=3, num_conv=6, flowdir='e')
     
     # sequential resNet + ANN
-    mydraw.canvas.create_text(40, 400, 
+    mydraw.canvas.create_text(40, 380, 
         text="sequential resNet CNN + 3-layer MLP (ANN)",  anchor='nw', font=16)
     mydraw.cnnMLP(x0=150, y0=450, skips=2, num_conv=6, flowdir='e')
     
