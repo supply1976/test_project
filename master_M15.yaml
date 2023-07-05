@@ -1,0 +1,424 @@
+# Feature Warehouse Settings
+DATABASE:
+  PATH: null
+  NAME: null
+  DESCRIPTION: null
+  SERVER_SETTINGS:
+    PORT: 0
+    MIN_PORT: 27001
+    MAX_PORT: 27500
+    SERVER_WAIT_TIME: 4.0
+    SERVER_STATUS_WAIT_TIME: 5.0
+    CONNECTION_CHECK_WAIT_TIME: 10.0
+    CONNECTION_TIME_OUT: 30000.0
+    SERVER_SELECTION_TIME_OUT: 30000.0
+    MAX_TRIALS_TO_SERVER_CONNECTION: 100
+    SOCK_FILE_PERMISSIONS: '0777'
+    AS_DAEMON: false
+
+# Feature Extractor parameter settings
+FEATURE_EXTRACTOR:
+  PROCESS_TYPE: resist
+  MODEL_TYPE: signal
+  MAX_INTERACTION_RANGE: 400
+  FOV_SIZE: 0.0
+  USE_FIXED_FOV_SIZE: false
+  SCRATCH_DIR: ./.adv_modeling_scratch
+  INPUT_DATA:
+    MODEL:
+      LOAD_FROM_DATABASE: false
+      FILE: null
+      OPTICS_TYPE: duv
+      LICENSES: null
+      SIMULATION_TYPE: amdl
+      MAIN_PROGRAM_NAME: null
+      PROCESS_WINDOW: true
+    LAYOUT:
+      FILE: null
+      LAYER_MAP: null
+      LRE_FLARE_MAP: null
+    GAUGE:
+      FILE:
+        CD_ASD: null
+        EP_ASD: null
+      ASD_COLUMN_NAME:
+        WAFER_CD: meas_cd
+        PROCESS_WINDOW:
+          DOSE: dose
+          DEFOCUS: defocus
+    FOV_TILING:
+      ENABLE: true
+      TILED_LAYOUT: ''
+      TILED_ASD: ''
+      TILED_FOV_DICT: ''
+  DISTRIBUTED_PROCESSOR:
+    DP_MODE: single
+    DP_COMMAND_OPTION: ''
+    NUM_WORKERS: null
+    WORKER_HOSTS_FILE: null
+    LOG_DIRECTORY_PATH: ./dp_log
+    ENABLE_WORKER_PROFILE: false
+    LOGGING_MODE: tqdm
+  FEATURE_SETTINGS:
+    IMAGE:
+      ENABLE: false
+    SLICE:
+      ENABLE: false
+    POINT:
+      ENABLE: true
+    SHIFT_VARIANCE:
+      ENABLE: false
+    LITHO:
+      ENABLE: false
+      MASK_ERROR: 0.0
+  ADVANCED_SETTINGS:
+    SIMULATION_MATRIX_SIZE: 0
+    MAX_SLICE_RANGE: 60
+    SLICE_RESOLUTION: 1.0
+    JCL_KEYWORD_FILE: null
+    RECOMPUTE: false
+
+# Configuration definition for the gauge sampler. Duplicated in PROLAB|CLUSTER
+
+GAUGE_SAMPLER:
+  GENERAL:
+    ANCHOR_ID: ''
+    SPLIT_CD_P: true
+    MODEL_ERROR_RATIO: 0.08
+    USE_MODEL_COEFS: true
+    VAL_TYPE: far from cluster centers
+  STAGE_I:
+    SKIP_STAGE: true
+    CLUSTERING:
+      EXPLANATION_POWER: 0.97
+      MAX_PARTITION_SIZE: 5000
+      MAX_NUM_OF_CLUSTERS: 500
+      MAX_NUM_OF_CD_CLUSTERS: 500
+      MAX_NUM_OF_EP_CLUSTERS: 300
+  STAGE_II:
+    SKIP_STAGE: false
+    CLUSTERING:
+      EXPLANATION_POWER: 0.97
+      MAX_PARTITION_SIZE: 5000
+      MAX_NUM_OF_CLUSTERS: 500
+      MAX_NUM_OF_CD_CLUSTERS: 500
+      MAX_NUM_OF_EP_CLUSTERS: 300
+    TRAINING:
+      MAX_NUM_OF_FOV: 500
+      MAX_NUM_OF_FOV_CD: 500
+      MAX_NUM_OF_FOV_EP: 300
+    VALIDATION:
+      MAX_NUM_OF_VAL_GAUGES: 300
+      MAX_NUM_OF_VAL_CD_GAUGES: 300
+      MAX_NUM_OF_VAL_EP_GAUGES: 300
+  OUTPUT:
+    CD_ASD_FILE: ''
+    EP_ASD_FILE: ''
+
+# Regression parameter settings
+
+REGRESSION:
+  FLOW:
+    OUTPUT_DIR: adv_modeling_output
+    WORK_DIR: adv_modeling_work
+    RANDOM_SEED: -1
+  DEBUG: {}
+  FUTURE: {}
+  INPUT_DATA:
+    USE_ANCHOR: true
+    ANCHOR_ID: null
+    ASSESSMENT:
+      IMAGE_AMBIT: 8
+      SLICE_EXTENSION: 6.0
+      SLICE_RESOLUTION: 3.0
+  SAMPLING:
+    USE_RANDOM: false
+    TEST_RATIO: 0.2
+  ENHANCE_BASE_MODEL:
+    ENABLE: true
+    USE_ALL_ATOMIC_TERMS: true
+    NUM_OF_TERMS: -1
+    XTERM:
+      ENABLE: false
+      NUM_OF_TERMS: 1
+  ANN:
+    ENABLE: true
+    ANN_WEIGHT: 0.05
+    EPOCHS_TO_REPORT: 500
+    EARLY_STOPPING:
+      ENABLE: true
+      PATIENCE: 1000
+    OVERFIT: {}
+    HYPER_PARAMETERS:
+      UNIT_NETWORK_LAYERS:
+        NUMBER_OF_NEURONS:
+        - 2
+        ACTIVATION_FUNCTIONS:
+        - sigmoid
+      ACTF_OUT: sigmoid
+      NUM_OF_UNITS: 15
+      ANN_RATIO: 0.618
+      SLOPE_ENHANCEMENT: 0.3
+      EPOCHS: 5000
+      BATCH_SIZE: -1
+      REG_POWER: 7.0
+      REG_CURV_POWER: 100.0
+      REG_L1: 0.0
+      REG_L2: 0.0
+      LEARNING_RATE:
+        INIT_LR: 0.005
+        DECAY_RATE: 0.9
+        DECAY_STEP: 500
+
+# Training parameter settings
+
+TRAINING:
+  SYSTEM:
+    GPU_NUM: 0
+    GPU_POOL: ''
+    CACHE_ENABLE: true
+  FLOW:
+    OUTPUT_DIR: output
+    WORK_DIR: work
+    RANDOM_SEED: -1
+    EPOCHS_TO_REPORT: 10
+    EXPORT_INTERMEDIATE_CKPT: false
+  DEBUG: {}
+  AUTO_MODEL_EXPORT:
+    ENABLE: false
+    EXPORT_MODEL_ONLY: false
+    MTP_PATH: null
+    CAPSULE_PATH: null
+    _FFT_KERNEL_CENTER_THRESHOLD: -1
+  INPUT_DATA:
+    USE_ANCHOR: true
+    ANCHOR_ID: 0
+    ASSESSMENT:
+      RESOLUTION: -1.0
+      _UP_SAMPLE_FACTOR: 128
+      _UP_SAMPLE_FILTER_AMBIT: 3
+  SAMPLING:
+    METHOD: random
+    EP_COST_WEIGHT_SCALING: 1.0
+    TEST_RATIO: 0.2
+    EXTERNAL_GAUGE_INFO: []
+    ENABLE_TEST_COST_WEIGHT: true
+    OUTPUT:
+      CD_ASD_FILE: cd_gauge_info.asd
+      EP_ASD_FILE: ep_gauge_info.asd
+  CNN:
+    INPUT_IMAGE_NAMES: []
+    INITIALIZATION:
+      NETWORK_INITIALIZER: glorot_uniform
+      CHECKPOINT_CAPSULE: null
+    STRUCTURE:
+      KERNEL_SIZE:
+      - 11
+      - 1
+      CHANNELS:
+      - 8
+      - 1
+      ACTIVATION_FUNCTIONS:
+      - sigmoid
+      - linear
+      SYMMETRY:
+      - all
+      - 'off'
+    IMAGE_TRAINING:
+      ENABLE: false
+      TARGET_IMAGE:
+        NAME:
+        - base_model
+        COEFFICIENT:
+        - 1.0
+      TARGET_IMAGE_AMBIT: 3
+      HYPER_PARAMETERS:
+        EPOCHS: 3000
+        BATCH_SIZE: -1
+        REG_L1: 0.0
+        REG_L2: 0.0
+        EARLY_STOPPING:
+          ENABLE: true
+          PATIENCE: 50
+        LEARNING_RATE:
+          INIT_LR: 0.003
+          DECAY_RATE: 0.9
+          DECAY_STEP: 500
+          BASE_LR: -1.0
+          WARMUP_EPOCHS: 10
+        IMAGE_MASK:
+          ENABLE: false
+          GAUSSIAN_BANDWIDTH: 4.0
+          STOPBAND_WEIGHT: 0.0
+    EPE_TRAINING:
+      ENABLE: false
+      HYPER_PARAMETERS:
+        EPOCHS: 3000
+        BATCH_SIZE: -1
+        REG_L1: 0.0
+        REG_L2: 0.0
+        SLOPE_ENHANCEMENT: 0.3
+        REG_POWER: 10.0
+        REG_CURV_POWER: 100.0
+        EARLY_STOPPING:
+          ENABLE: true
+          PATIENCE: 50
+        LEARNING_RATE:
+          INIT_LR: 0.003
+          DECAY_RATE: 0.9
+          DECAY_STEP: 500
+          BASE_LR: -1.0
+          WARMUP_EPOCHS: 10
+
+# 
+GS_FLOW:
+  GROUPING:
+    GROUP_ASD: null
+    GROUP_COL: group
+  GENERAL:
+    PROC_TYPE: Gauge Sampling
+    DB_PATH: null
+    DB_NAME_PRE: null
+    RUN_DATA_CLEAN: true
+    MERGE_INPUTS: false
+    RUN_TABLE:
+      JOB_ID: []
+      TEST_PATTERN: []
+      CD_ASD: []
+      EP_ASD: []
+      MEASURED_CD_COL: []
+      LAYER_MAPPING: []
+  FE_SETTINGS:
+    PROCESS_TYPE: resist
+    MODEL_TYPE: signal
+    MAX_INTERACTION_RANGE: 400
+    FOV_SIZE: 0.0
+    USE_FIXED_FOV_SIZE: false
+    SCRATCH_DIR: ./.adv_modeling_scratch
+    INPUT_DATA:
+      MODEL:
+        LOAD_FROM_DATABASE: false
+        FILE: null
+        OPTICS_TYPE: duv
+        LICENSES: null
+        SIMULATION_TYPE: amdl
+        MAIN_PROGRAM_NAME: null
+        PROCESS_WINDOW: true
+      LAYOUT:
+        FILE: null
+        LAYER_MAP: null
+        LRE_FLARE_MAP: null
+      GAUGE:
+        FILE:
+          CD_ASD: null
+          EP_ASD: null
+        ASD_COLUMN_NAME:
+          WAFER_CD: meas_cd
+          PROCESS_WINDOW:
+            DOSE: dose
+            DEFOCUS: defocus
+      FOV_TILING:
+        ENABLE: true
+        TILED_LAYOUT: ''
+        TILED_ASD: ''
+        TILED_FOV_DICT: ''
+    DISTRIBUTED_PROCESSOR:
+      DP_MODE: single
+      DP_COMMAND_OPTION: ''
+      NUM_WORKERS: null
+      WORKER_HOSTS_FILE: null
+      LOG_DIRECTORY_PATH: ./dp_log
+      ENABLE_WORKER_PROFILE: false
+      LOGGING_MODE: tqdm
+    FEATURE_SETTINGS:
+      IMAGE:
+        ENABLE: false
+      SLICE:
+        ENABLE: false
+      POINT:
+        ENABLE: true
+      SHIFT_VARIANCE:
+        ENABLE: false
+      LITHO:
+        ENABLE: false
+        MASK_ERROR: 0.0
+    ADVANCED_SETTINGS:
+      SIMULATION_MATRIX_SIZE: 0
+      MAX_SLICE_RANGE: 60
+      SLICE_RESOLUTION: 1.0
+      JCL_KEYWORD_FILE: null
+      RECOMPUTE: false
+  GS_SETTINGS:
+    MULTI_STAGE: false
+    GENERAL:
+      ANCHOR_ID: ''
+      SPLIT_CD_P: true
+      MODEL_ERROR_RATIO: 0.08
+      USE_MODEL_COEFS: true
+      VAL_TYPE: far from cluster centers
+    STAGE_I:
+      CLUSTERING:
+        EXPLANATION_POWER: 0.97
+        MAX_PARTITION_SIZE: 5000
+        MAX_NUM_OF_CLUSTERS: 500
+        MAX_NUM_OF_CD_CLUSTERS: 500
+        MAX_NUM_OF_EP_CLUSTERS: 300
+    STAGE_II:
+      SKIP_STAGE: false
+      CLUSTERING:
+        EXPLANATION_POWER: 0.97
+        MAX_PARTITION_SIZE: 5000
+        MAX_NUM_OF_CLUSTERS: 500
+        MAX_NUM_OF_CD_CLUSTERS: 500
+        MAX_NUM_OF_EP_CLUSTERS: 300
+      TRAINING:
+        MAX_NUM_OF_FOV: 500
+        MAX_NUM_OF_FOV_CD: 500
+        MAX_NUM_OF_FOV_EP: 300
+      VALIDATION:
+        MAX_NUM_OF_VAL_GAUGES: 300
+        MAX_NUM_OF_VAL_CD_GAUGES: 300
+        MAX_NUM_OF_VAL_EP_GAUGES: 300
+    OUTPUT:
+      CD_ASD_FILE: ''
+      EP_ASD_FILE: ''
+  CA_SETTINGS:
+    MULTI_STAGE: false
+    GENERAL:
+      ANCHOR_ID: ''
+      SPLIT_CD_P: true
+      MODEL_ERROR_RATIO: 0.08
+      USE_MODEL_COEFS: true
+      VAL_TYPE: far from cluster centers
+    STAGE_I:
+      CLUSTERING:
+        EXPLANATION_POWER: 0.97
+        MAX_PARTITION_SIZE: 5000
+        MAX_NUM_OF_CLUSTERS: 500
+        MAX_NUM_OF_CD_CLUSTERS: 500
+        MAX_NUM_OF_EP_CLUSTERS: 300
+    STAGE_II:
+      SKIP_STAGE: false
+      CLUSTERING:
+        EXPLANATION_POWER: 0.97
+        MAX_PARTITION_SIZE: 5000
+        MAX_NUM_OF_CLUSTERS: 500
+        MAX_NUM_OF_CD_CLUSTERS: 500
+        MAX_NUM_OF_EP_CLUSTERS: 300
+      TRAINING:
+        MAX_NUM_OF_FOV: 500
+        MAX_NUM_OF_FOV_CD: 500
+        MAX_NUM_OF_FOV_EP: 300
+      VALIDATION:
+        MAX_NUM_OF_VAL_GAUGES: 300
+        MAX_NUM_OF_VAL_CD_GAUGES: 300
+        MAX_NUM_OF_VAL_EP_GAUGES: 300
+    OUTPUT:
+      CD_ASD_FILE: ''
+      EP_ASD_FILE: ''
+  DC_SETTINGS:
+    RESIDUAL_THRESHOLD: 1.0
+    FITTING_THRESHOLD: -1.0
+    NEIGHBORHOOD_SIZE: 5
+    OUTLIER_DECISION: 0.5
+
