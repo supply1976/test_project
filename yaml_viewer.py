@@ -5,7 +5,7 @@ from functools import reduce
 import yaml
 import tkinter as tk
 import tkinter.messagebox as tkMB
-import ttk
+from tkinter import ttk
 
 # python 2
 #import tkFileDialog as filedialog
@@ -45,7 +45,7 @@ class MenuBar:
         pass
         
 
-class SectionFrame(tk.Frame):
+class SectionFrame(tk.Frame, object):
     """
     used to load n-level nest dict (from yaml) 
     and assign an Entry widget for every yaml config input
@@ -62,7 +62,7 @@ class SectionFrame(tk.Frame):
         for i, (k, v) in enumerate(nestdict.items()):
             if type(v) is not dict:
                 lb = tk.Label(parent, text=k)
-                en = tk.Entry(parent, name=k.lower())
+                en = ttk.Entry(parent, name=k.lower())
                 self.entry_widgets.append(en)
                 if v is not None: en.insert(0, v)
                 #en.config(state='disabled')
@@ -94,6 +94,9 @@ def open_new(title, ndict):
     root.title(title)
     newfr = SectionFrame(master=root, sec_name='dummy')
     newfr.show_next(root, ndict)
+    tk.Button(root, text="Update", width=30).grid(columnspan=5)
+    for en in newfr.entry_widgets:
+        print(en.winfo_name())
     #print(newfr.entry_widgets)
     
     
@@ -121,8 +124,7 @@ def yaml_update(yamldict, all_entry_widgets):
             try:
                 val = float(val)
             except:
-                val = val
-            
+                val = val   
         yaml_key = [x.upper() for x in en.bindtags()[0].split('.')[2:]]
         yaml_key.append(val)
         udict = reduce(lambda x,y: {y:x}, reversed(yaml_key))
@@ -206,6 +208,7 @@ def main():
     cnnimgtr_btn = ttk.Button(cnn_lbfr, text="IMAGE TRAINING")
     cnnimgtr_btn.config(command=lambda: open_new('IMAGE_TRAINING', d_cnnimgtr))
     cnnimgtr_btn.grid(row=1, column=5, **_GRID_CFG1)
+    
     # EPE
     cnnepetr_btn = ttk.Button(cnn_lbfr, text="EPE TRAINING")
     cnnepetr_btn.config(command=lambda: open_new('EPE_TRAINING', d_cnnepetr))
