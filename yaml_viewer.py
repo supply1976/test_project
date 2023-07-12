@@ -56,15 +56,24 @@ class SectionFrame(tk.Frame, object):
         self.sec_name = sec_name
         self.levels = 0
         self.entry_widgets=[]
+        self.yaml_keys=[]
         
     def show_next(self, parent, nestdict):
         self.levels +=1
         for i, (k, v) in enumerate(nestdict.items()):
             if type(v) is not dict:
                 lb = tk.Label(parent, text=k)
-                en = ttk.Entry(parent, name=k.lower())
+                if isinstance(v, bool):
+                    en = tk.Checkbutton(parent, name=k.lower())
+                else:
+                    en = ttk.Entry(parent, name=k.lower())
+                yaml_key = [x.upper() for x in en.bindtags()[0].split('.')[2:]]
+                yaml_key = "|".join(yaml_key)
+                print(yaml_key)
+                self.yaml_keys.append(yaml_key)
+                en.setvar(name=yaml_key, value=v)
                 self.entry_widgets.append(en)
-                if v is not None: en.insert(0, v)
+                #en.insert(0, en.getvar(name=yaml_key))
                 #en.config(state='disabled')
                 if self.levels >=3:
                     lb.grid(row=0, column=i, **_GRID_CFG1)
@@ -87,6 +96,27 @@ class SectionFrame(tk.Frame, object):
             
     def _foo(self):
         pass
+
+
+def cnn_gui(title):
+    root = tk.Toplevel()
+    root.title(title)
+    master = tk.Frame(root)
+    master.pack()
+    tk.Label(master, text="#layer ID").grid(row=0, column=0, **_GRID_CFG1)    
+    tk.Label(master, text="_SKIP_INPUTS").grid(row=0, column=1, **_GRID_CFG1)
+    tk.Label(master, text="KERNEL_SIZE").grid(row=0, column=2, **_GRID_CFG1)
+    tk.Label(master, text="CHANNELS").grid(row=0, column=3, **_GRID_CFG1)
+    tk.Label(master, text="ACTIVATION_FUNCTIONS").grid(row=0, column=4, **_GRID_CFG1)
+    tk.Label(master, text="SYMMETRY").grid(row=0, column=5, **_GRID_CFG1)
+    for num_layer in range(3):
+        for colID in range(6):
+            if colID==0:
+                tk.Label(master, text=str(num_layer)).grid(
+                    row=num_layer+1, column=colID, **_GRID_CFG1)
+            else:
+                tk.Entry(master).grid(
+                    row=num_layer+1, column=colID, **_GRID_CFG1)
 
 
 def open_new(title, ndict):
@@ -115,17 +145,9 @@ def nestdict_update(d, u):
 
 def yaml_update(yamldict, all_entry_widgets):
     for en in all_entry_widgets:
-        pname = en.winfo_parent()
-        if pname.endswith('server_settings'): continue
-        val = en.get()
-        try:
-            val = int(val)
-        except:
-            try:
-                val = float(val)
-            except:
-                val = val   
         yaml_key = [x.upper() for x in en.bindtags()[0].split('.')[2:]]
+        val = en.getvar(name="|".join(yaml_key))
+        print(val)
         yaml_key.append(val)
         udict = reduce(lambda x,y: {y:x}, reversed(yaml_key))
         nestdict_update(yamldict, udict)
@@ -144,7 +166,7 @@ def main():
     # root window settings    
     root = tk.Tk()
     root.title("Yaml Viewer/Editor")
-    #root.geometry('800x600')
+    root.geometry('800x600')
     root.configure(bg='#aaffff')
     #root.option_add("*Font", "courier 12")
     #root.option_add("*Font", "NewTimes 10")
@@ -166,6 +188,9 @@ def main():
     with open(fn, 'r') as fd:
         yamldict = yaml.full_load(fd)
 
+    test_key = ['FEATURE_EXTRACTOR', 'INPUT_DATA', 'FOV_TILING']
+    d = reduce(lambda x,y: x[y], test_key, yamldict)
+    print(d)
     #test_key = ['DATABASE','PATH', 'foo_path']
     #dbpath_update_dict = reduce(lambda x,y: {y:x}, reversed(test_key))
     #print(dbpath_update_dict)
@@ -203,6 +228,7 @@ def main():
     cnnstruct_lbfr.grid_forget()
     
     cnnstruct_btn = ttk.Button(cnn_lbfr, text="STRUCTURE")
+    cnnstruct_btn.config(command=lambda: cnn_gui("CNN"))
     cnnstruct_btn.grid(row=1, column=4, **_GRID_CFG1)
     # IMG
     cnnimgtr_btn = ttk.Button(cnn_lbfr, text="IMAGE TRAINING")
