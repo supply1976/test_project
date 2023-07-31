@@ -328,7 +328,20 @@ class CNNStructGUI(tk.Frame, object):
 
     def update_btn_event_handle(self):
         self.get_cnn_struct_values()
-        
+    
+    def struct_splits_combine_handle(input_list, combo_type=='default'):
+        _combos = None
+        output = [x.strip() for x in input_list.split(",") if len(x.strip())>0]
+        if combo_type='all':
+            _combos = list(itertools.product(*output))
+        elif combo_type='default':
+            max_splits = max([len(x) for x in output])
+            output = [l*max_splits for l in output if len(l)<max_splits]
+            _combos = zip(*output)
+        else:
+            return _combos
+
+
     def get_cnn_struct_values(self):
         self.struct_values_combo = []
         self.skips_value = [_.get() for _ in self.skip_vars]
@@ -337,13 +350,23 @@ class CNNStructGUI(tk.Frame, object):
         self.actfs_value = [_.get() for _ in self.actf_vars]
         self.symms_value = [_.get() for _ in self.symm_vars]
         
-
+        # handle on kernel size splits
+        kerns_combo_type=None
         for j, k in enumerate(self.kerns_value):
-            if not hasattr(k, '__iter__'):
-                self.kerns_value[j] = [int(k)]
-            else:
+            # j-th layer, kernel size = k or string 
+            if "," in k:
                 self.kerns_value[j] = list(map(int, k.split(",")))
-        kerns_combo = list(itertools.product(*self.kerns_value))
+                kerns_combo_type="p"
+            elif ";" in k:
+                self.kerns_value[j] = list(map(int, k.split(";")))
+                kerns_combo_type="z"
+            else:
+                self.kerns_value[j] = [int(k)]
+        if kerns_combo_type=="p":
+            kerns_combo = list(itertools.product(*self.kerns_value))
+        elif kerns_combo_type="z":
+            max_splits = max([len(x) for x in self.kerns_value])
+            
 
         for i, c in enumerate(self.chans_value):
             if not hasattr(c, '__iter__'):
@@ -427,6 +450,9 @@ class UpdateUtil(object):
             self.all_yamlkeys_to_tkvars[k].set(v.get())
    
     def epetr_hp_update(self):
+        for k, v in self.epekv:
+          print(k, type(k), v, type(v) )
+          
         new_kv = [("TRAINING|CNN|EPE_TRAINING|"+k, v) for (k, v) in self.epekv]
         for (k, v) in new_kv:
             self.all_yamlkeys_to_tkvars[k].set(v.get())
