@@ -1,6 +1,7 @@
 #
 import os, sys
 import numpy as np
+import pandas as pd
 import argparse
 import collections
 import itertools
@@ -16,6 +17,10 @@ _GRID_CFG1 = {'padx':10, 'ipadx': 5, 'ipady':5, 'sticky':'W'}
 _GRID_CFG2 = {'padx':10, 'ipadx': 5, 'ipady':5}
 
 
+def _not_imp():
+    tkMB.showinfo("Orz", "Not Yet Implemented ...")
+        
+        
 class MenuBar:
     def __init__(self, root):
         self.root = root
@@ -154,6 +159,15 @@ class CNNStructGUI(tk.Frame, object):
         self.chan_vars = []
         self.actf_vars = []
         self.symm_vars = []
+        self.tkvar_kernCrossAllCheck = tk.BooleanVar()
+        self.tkvar_kernCrossAllCheck.set(False)
+        self.tkvar_chanCrossAllCheck = tk.BooleanVar()
+        self.tkvar_chanCrossAllCheck.set(False)
+        self.tkvar_actfCrossAllCheck = tk.BooleanVar()
+        self.tkvar_actfCrossAllCheck.set(False)
+        self.tkvar_symmCrossAllCheck = tk.BooleanVar()
+        self.tkvar_symmCrossAllCheck.set(False)
+
     
     def _foo(self):
         tkMB.showinfo("Orz", "Not Yet Implemented ...")
@@ -198,7 +212,21 @@ class CNNStructGUI(tk.Frame, object):
         self.add_layer_btn.grid(row=0, column=7, **_GRID_CFG1)
         self.del_layer_btn = tk.Button(self.lbfr, text="del layer")
         self.del_layer_btn.grid(row=0, column=8, **_GRID_CFG1)
-        
+
+        self.kern_cb = tk.Checkbutton(self.lbfr, text="cross all", 
+            variable=self.tkvar_kernCrossAllCheck, onvalue=True, offvalue=False)
+        self.chan_cb = tk.Checkbutton(self.lbfr, text="cross all", 
+            variable=self.tkvar_chanCrossAllCheck, onvalue=True, offvalue=False)
+        self.actf_cb = tk.Checkbutton(self.lbfr, text="cross all", 
+            variable=self.tkvar_actfCrossAllCheck, onvalue=True, offvalue=False)
+        self.symm_cb = tk.Checkbutton(self.lbfr, text="cross all", 
+            variable=self.tkvar_symmCrossAllCheck, onvalue=True, offvalue=False)
+
+        self.kern_cb.grid(row=1, column=2, **_GRID_CFG1)
+        self.chan_cb.grid(row=1, column=3, **_GRID_CFG1)
+        self.actf_cb.grid(row=1, column=4, **_GRID_CFG1)
+        self.symm_cb.grid(row=1, column=5, **_GRID_CFG1)
+  
         # load CNN structure configs from original yaml dict
         cnn_struct_d = self.cnndict['STRUCTURE']
         kerns = cnn_struct_d['KERNEL_SIZE']
@@ -216,6 +244,16 @@ class CNNStructGUI(tk.Frame, object):
         self.oldBKM2_btn.config(command=self.load_bkm2_struct)
         self.unet66_btn.config(command=self.load_unet66_struct)
         self.resnet13_btn.config(command=self.load_resnet13_struct)
+        canvas_frame = tk.Frame(parent, bg='#000000')
+        canvas_frame.pack(fill='both')
+        canvas = tk.Canvas(canvas_frame, bg='white', width=400, height=200, 
+            scrollregion=(0,0,400,800))
+        scrollY = tk.Scrollbar(canvas_frame, orient='vertical')
+        scrollY.pack(side='right', fill='y')
+        canvas.config(yscrollcommand=scrollY.set)
+        canvas.pack()
+        canvas.create_text(100,50, text="add network graph later")
+        
     
     def load_simple_net(self):
         num_layers = 1+self.layer_id
@@ -249,7 +287,7 @@ class CNNStructGUI(tk.Frame, object):
             self.del_layer()
         assert self.layer_id == -1
         kerns = [19,41,23,37,29,31, 1, 1, 1, 1, 1, 1]
-        chans = [ 2, 2, 3, 3, 4, 4, 4, 4, 3, 3, 2, 1]
+        chans = [ 2, 2, 2, 3, 3, 4, 4, 4, 3, 3, 2, 1]
         skips = [-1, 0,-1, 2,-1, 4, 5, 4, 3, 2, 1,-1]
         actfs = ['sigmoid']*6 + ['linear']*6
         symms = ['xy_mirror']*6 + ['off']*6
@@ -303,55 +341,67 @@ class CNNStructGUI(tk.Frame, object):
         self.symm_vars.append(tkvar_symm)
         
         tk.Label(self.lbfr, text=str(self.layer_id)).grid(
-            row=self.layer_id+1, column=0, **_GRID_CFG1)
+            row=self.layer_id+2, column=0, **_GRID_CFG1)
         wid_skip = ttk.Combobox(self.lbfr, width=14,
             values=list(range(-1, self.layer_id+1)), textvariable=tkvar_skip)
-        wid_skip.grid(row=self.layer_id+1, column=1, **_GRID_CFG1)
+        wid_skip.grid(row=self.layer_id+2, column=1, **_GRID_CFG1)
         
         wid_kern = ttk.Combobox(self.lbfr, width=14,
             values=list(range(3, 43, 2)), textvariable=tkvar_kern)
-        wid_kern.grid(row=self.layer_id+1, column=2, **_GRID_CFG1)
+        wid_kern.grid(row=self.layer_id+2, column=2, **_GRID_CFG1)
         
         wid_chan = ttk.Combobox(self.lbfr, width=14,
             values=list(range(1, 17)), textvariable=tkvar_chan)
-        wid_chan.grid(row=self.layer_id+1, column=3, **_GRID_CFG1)
+        wid_chan.grid(row=self.layer_id+2, column=3, **_GRID_CFG1)
         
         wid_actf = ttk.Combobox(self.lbfr, width=14,
             values=['linear', 'sigmoid', 'relu'], textvariable=tkvar_actf)
-        wid_actf.grid(row=self.layer_id+1, column=4, **_GRID_CFG1)
+        wid_actf.grid(row=self.layer_id+2, column=4, **_GRID_CFG1)
         
         wid_symm = ttk.Combobox(self.lbfr, width=14,
             values=['all', 'xy_mirror', 'off'], textvariable=tkvar_symm)
-        wid_symm.grid(row=self.layer_id+1, column=5, **_GRID_CFG1)
+        wid_symm.grid(row=self.layer_id+2, column=5, **_GRID_CFG1)
         
         self.en_widgets.append([wid_skip, wid_kern, wid_chan, wid_actf, wid_symm])
 
     def update_btn_event_handle(self):
         self.get_cnn_struct_values()
     
-    def struct_splits_combine_handle(input_list, combo_type=='default'):
+    def struct_splits(self, input_list, combo_all=False):
         _combos = None
-        output = [x.strip() for x in input_list.split(",") if len(x.strip())>0]
-        if combo_type='all':
+        output = [[_.strip() for _ in x.split(",") if len(_.strip())>0] for x in input_list]
+        if combo_all:
             _combos = list(itertools.product(*output))
-        elif combo_type='default':
-            max_splits = max([len(x) for x in output])
-            output = [l*max_splits for l in output if len(l)<max_splits]
-            _combos = zip(*output)
         else:
-            return _combos
+            max_splits = max([len(x) for x in output])
+            output = [l*max_splits for l in output]
+            output = [l[0:max_splits] for l in output[:]]
+            _combos = list(zip(*output))
+        return _combos
 
 
     def get_cnn_struct_values(self):
+        orig_stdout = sys.stdout
         self.struct_values_combo = []
         self.skips_value = [_.get() for _ in self.skip_vars]
         self.kerns_value = [_.get() for _ in self.kern_vars]
         self.chans_value = [_.get() for _ in self.chan_vars]
         self.actfs_value = [_.get() for _ in self.actf_vars]
         self.symms_value = [_.get() for _ in self.symm_vars]
-        
+
         # handle on kernel size splits
-        kerns_combo_type=None
+        kern_combo_status = self.tkvar_kernCrossAllCheck.get()
+        chan_combo_status = self.tkvar_chanCrossAllCheck.get()
+        actf_combo_status = self.tkvar_actfCrossAllCheck.get()
+        symm_combo_status = self.tkvar_symmCrossAllCheck.get()
+        
+        kerns_combo = self.struct_splits(self.kerns_value, combo_all=kern_combo_status)
+        chans_combo = self.struct_splits(self.chans_value, combo_all=chan_combo_status)
+        actfs_combo = self.struct_splits(self.actfs_value, combo_all=actf_combo_status)
+        symms_combo = self.struct_splits(self.symms_value, combo_all=symm_combo_status)
+        kerns_combo = [list(map(int , x)) for x in kerns_combo]
+        chans_combo = [list(map(int , x)) for x in chans_combo]  
+        """
         for j, k in enumerate(self.kerns_value):
             # j-th layer, kernel size = k or string 
             if "," in k:
@@ -366,7 +416,6 @@ class CNNStructGUI(tk.Frame, object):
             kerns_combo = list(itertools.product(*self.kerns_value))
         elif kerns_combo_type="z":
             max_splits = max([len(x) for x in self.kerns_value])
-            
 
         for i, c in enumerate(self.chans_value):
             if not hasattr(c, '__iter__'):
@@ -374,23 +423,40 @@ class CNNStructGUI(tk.Frame, object):
             else:
                 self.chans_value[i] = list(map(int, c.split(",")))
         chans_combo = list(itertools.product(*self.chans_value))
-
-        if len(kerns_combo)==1 and len(chans_combo)==1:
+        """
+        all_nets_combo = list(itertools.product(
+            [self.skips_value],
+            kerns_combo,
+            chans_combo,
+            actfs_combo,
+            symms_combo))
+        print(len(all_nets_combo))
+        
+        if len(all_nets_combo)==1:
             tk.StringVar(name=self.yamlkey_skips).set(self.skips_value)
             tk.StringVar(name=self.yamlkey_kerns).set(kerns_combo[0])
             tk.StringVar(name=self.yamlkey_chans).set(chans_combo[0])
-            tk.StringVar(name=self.yamlkey_actfs).set(self.actfs_value)
-            tk.StringVar(name=self.yamlkey_symms).set(self.symms_value)
+            tk.StringVar(name=self.yamlkey_actfs).set(actfs_combo[0])
+            tk.StringVar(name=self.yamlkey_symms).set(symms_combo[0])
             self.update_util.nets_combo = None
         else:
-            all_nets_combo = list(itertools.product(
-                [self.skips_value],
-                kerns_combo,
-                chans_combo,
-                [self.actfs_value],
-                [self.symms_value]))
-        
             self.update_util.nets_combo = np.array(all_nets_combo, dtype=object)
+            data=[]
+            for i, t in enumerate(self.update_util.nets_combo):
+                sid = str(i+1).zfill(4)
+                df = pd.DataFrame(t, index=["SKIP", "KERN", "CHAN", "ACTF", "SYMM"])
+                df = pd.concat([df], names=["split ID"], keys=[sid])
+                data.append(df)
+            dfall = pd.concat(data)
+            pd.set_option('display.max_rows', None)
+            pd.set_option('display.max_columns', None)
+            pd.set_option('display.width', None)
+            print(dfall)
+            print("network_splits_table.txt is saved")
+            with open('network_splits_table.txt', 'w') as f:
+                sys.stdout = f
+                print(dfall)
+                sys.stdout = orig_stdout
 
 
 class UpdateUtil(object):
@@ -489,6 +555,11 @@ def single_yaml_saveto(update_util):
         
         
 def nets_combo_export(update_util):
+    save_dir = filedialog.askdirectory(initialdir='~/')
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+        save_dir = os.path.abspath(save_dir)
+    print("all yamls are saved in {}".format(save_dir))
     scripts = []
     assert update_util.nets_combo is not None
     update_util.yaml_update()
@@ -496,12 +567,12 @@ def nets_combo_export(update_util):
     print(update_util.nets_combo.shape)
     for i, t in enumerate(update_util.nets_combo):
         tid = str(i+1).zfill(4)
-        new_fn = fn+"-"+tid+ext
+        new_fn = fn+"-struct-"+tid+ext
         sk = " ".join(list(map(str, t[0])))
         k = " ".join(list(map(str, t[1])))
         c = " ".join(list(map(str, t[2])))
         a = " ".join(t[3])
-        s = " ".join(t[4])        
+        s = " ".join(t[4])
   
         tk.StringVar(name=update_util.yamlkey_skips).set(sk)
         tk.StringVar(name=update_util.yamlkey_kerns).set(k)
@@ -509,13 +580,13 @@ def nets_combo_export(update_util):
         tk.StringVar(name=update_util.yamlkey_actfs).set(a)
         tk.StringVar(name=update_util.yamlkey_symms).set(s)
         update_util.yaml_update()
-        with open(new_fn, 'w') as f:
+        with open(os.path.join(save_dir, new_fn), 'w') as f:
             yaml.dump(update_util.yamldict, f, sort_keys=False)
         scripts.append(" ".join(['adv_modeling', '-tr', new_fn, '--gpu', '\n']))
         scripts.append("sleep 30 ; rm -rf .proj ; sleep 10 \n")
-    with open('run_all_yamls.sh', 'w') as f:
+    with open(os.path.join(save_dir, 'run_all_yamls.sh'), 'w') as f:
         f.writelines(scripts)
-    os.chmod('./run_all_yamls.sh', 0o0777)
+    os.chmod(os.path.join(save_dir, './run_all_yamls.sh'), 0o0777)
     
 
 def open_cnn_gui(update_util):
@@ -537,6 +608,11 @@ def nestdict_update(d, u):
         else:
             d[k] = v
     return d        
+
+def ask_open_path(yamlkey):
+    pathdir = filedialog.askdirectory(initialdir='~/')
+    tk.StringVar(name=yamlkey).set(pathdir)
+
         
 def main():
     parser = argparse.ArgumentParser()
@@ -545,7 +621,7 @@ def main():
     # root window settings    
     root = tk.Tk()
     root.title("Yaml Viewer/Editor/Generator")
-    #root.geometry('1400x900')
+    root.geometry('1400x900')
     root.configure(bg='#aaffff')
     #root.option_add("*Font", "courier 12")
     #root.option_add("*Font", "NewTimes 10")
@@ -600,17 +676,20 @@ def main():
     top_btn.grid(row=0, column=0, **_GRID_CFG1)
     top_en = tk.Entry(topfr, textvariable=update_util.saveto_fn)
     top_en.grid(row=0, column=1, **_GRID_CFG1)
-    tk.Button(topfr, text="splits combo export all",
+    tk.Button(topfr, text="network splits export all",
         command=lambda: nets_combo_export(update_util)).grid(
             row=0, column=2, **_GRID_CFG1) 
     
     nbname=notebook._name
     # customize DATABASE tab GUI
     app_database = root.nametowidget(nbname+'.database')
-    tk.Button(app_database, text="Browse").grid(row=0, column=2, **_GRID_CFG1)
     en_dbpath = root.nametowidget(nbname+'.database.path')
     en_dbpath.config(width=60)
-    tk.Button(app_database, text="get available names").grid(row=1, column=2, **_GRID_CFG2)
+    tk.Button(app_database, text="Browse", 
+        command=lambda: ask_open_path("DATABASE|PATH")).grid(row=0, column=2, **_GRID_CFG1)
+    
+    tk.Button(app_database, text="get available names", 
+        command=_not_imp).grid(row=1, column=2, **_GRID_CFG2)
    
     #customize FE tab GUI
     fe_inp_data_name = nbname+'.feature_extractor.input_data'
