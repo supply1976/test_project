@@ -59,7 +59,7 @@ class MenuBar:
 
 class AppFrame(tk.Frame, object):
     """
-    used to load n-level nest-dict (from yaml.full_load())
+    use to load n-level nest-dict (from yaml.full_load())
     get yaml config keys, 
     assign Entry widgets for all yaml config input
     """
@@ -84,12 +84,25 @@ class AppFrame(tk.Frame, object):
                     if k=="NETWORK_INITIALIZER":
                         en = ttk.Combobox(parent, name=k.lower(), width=12)
                         en.config(value=[
-                            'glorot_uniform', 'lecun_uniform', 'checkpoint_capsule'])
+                        'glorot_uniform', 'lecun_uniform', 'checkpoint_capsule'])
                     else:
                         en = tk.Entry(parent, name=k.lower(), width=14, fg='blue')
                 #        
                 yamlkey = [x.upper() for x in en.bindtags()[0].split('.')[2:]]
                 yamlkey = "|".join(yamlkey)
+                if yamlkey.endswith("|BATCH_SIZE"):
+                    lb.config(bg='orange')
+                if yamlkey.endswith("LEARNING_RATE|BASE_LR"):
+                    lb.config(bg='orange')
+                if yamlkey.endswith("HYPER_PARAMETERS|REG_L2"):
+                    lb.config(bg='orange')
+                if yamlkey.endswith("HYPER_PARAMETERS|REG_POWER"):
+                    lb.config(bg='orange')
+                if yamlkey.endswith("HYPER_PARAMETERS|REG_CURV_POWER"):
+                    lb.config(bg='orange')
+                if yamlkey.endswith("HYPER_PARAMETERS|SLOPE_ENHANCEMENT"):
+                    lb.config(bg='orange')
+                    
                 if type(v) is bool:
                     var = tk.BooleanVar(name=yamlkey, value=v)
                 elif type(v) is int:
@@ -106,7 +119,7 @@ class AppFrame(tk.Frame, object):
                 en.config(textvariable=var)
                 
                 self.yamlkeys_to_tkvars.append((yamlkey, var))
-                self.entry_widgets.append(en)
+                self.entry_widgets.append((yamlkey, en))
                 
                 if self.levels >1:
                     lb.grid(row=0, column=i, **_GRID_CFG1)
@@ -143,15 +156,14 @@ class CNNStructGUI(tk.Frame, object):
         self.name = name
         self.layer_id = -1
         self.en_widgets = []
-        self.net_names = ['unet636', 'resnet50', 'TBD']
         self.yamlkey_kerns = "TRAINING|CNN|STRUCTURE|KERNEL_SIZE"
         self.yamlkey_chans = "TRAINING|CNN|STRUCTURE|CHANNELS"
         self.yamlkey_actfs = "TRAINING|CNN|STRUCTURE|ACTIVATION_FUNCTIONS"
         self.yamlkey_symms = "TRAINING|CNN|STRUCTURE|SYMMETRY"
         self.yamlkey_skips = "TRAINING|CNN|_SKIP_INPUTS"
-        #_kern_dila = "TRAINING|CNN|_KERNEL_DILATION"
-        #self.yamlkey_kdila_en = _kern_dila+"|ENABLE"
-        #self.yamlkey_kdila_ra = _kern_dila+"|DILATION_RATE"
+        _kern_dilat = "TRAINING|CNN|_KERNEL_DILATION"
+        self.yamlkey_kdilat_en = _kern_dilat+"|ENABLE"
+        self.yamlkey_kdilat_ra = _kern_dilat+"|DILATION_RATE"
         
         # tk variables containers
         self.skip_vars = []
@@ -159,6 +171,7 @@ class CNNStructGUI(tk.Frame, object):
         self.chan_vars = []
         self.actf_vars = []
         self.symm_vars = []
+        # tk variables for Checkbutton 
         self.tkvar_kernCrossAllCheck = tk.BooleanVar()
         self.tkvar_kernCrossAllCheck.set(False)
         self.tkvar_chanCrossAllCheck = tk.BooleanVar()
@@ -168,10 +181,7 @@ class CNNStructGUI(tk.Frame, object):
         self.tkvar_symmCrossAllCheck = tk.BooleanVar()
         self.tkvar_symmCrossAllCheck.set(False)
 
-    
-    def _foo(self):
-        tkMB.showinfo("Orz", "Not Yet Implemented ...")
-    
+
     def gui_start(self, parent):
         lbfr_0 = tk.LabelFrame(parent, text=" MICS ")
         lbfr_0.pack()
@@ -181,22 +191,23 @@ class CNNStructGUI(tk.Frame, object):
             row=0, column=0, rowspan=2, sticky='NS', **_GRID_CFG2)
         # 
         self.simple_net_btn = tk.Button(lbfr_0, text="simple")
-        self.simple_net_btn.grid(row=0, column=1, rowspan=2, sticky='NS', **_GRID_CFG2)
+        self.simple_net_btn.grid(row=0, column=1, sticky='NS', **_GRID_CFG2)
         # 
         self.oldBKM2_btn = tk.Button(lbfr_0, text="oldBKM2")
-        self.oldBKM2_btn.grid(row=0, column=2, rowspan=2, sticky='NS', **_GRID_CFG2)
+        self.oldBKM2_btn.grid(row=0, column=2, sticky='NS', **_GRID_CFG2)
         # 
         self.unet66_btn = tk.Button(lbfr_0, text="unet66")
-        self.unet66_btn.grid(row=0, column=3, rowspan=2, sticky='NS', **_GRID_CFG2)
+        self.unet66_btn.grid(row=0, column=3, sticky='NS', **_GRID_CFG2)
         # 
         self.resnet13_btn = tk.Button(lbfr_0, text="resnet13 (yan)")
-        self.resnet13_btn.grid(row=0, column=4, rowspan=2, sticky='NS', **_GRID_CFG2)
-        # 
-        tk.Label(lbfr_0, text="other nets").grid(row=0, column=5, **_GRID_CFG2)
-        self.others_cb = ttk.Combobox(lbfr_0, value=self.net_names)
-        self.others_cb.current(0)
-        self.others_cb.grid(row=1, column=5, **_GRID_CFG2)
-       
+        self.resnet13_btn.grid(row=0, column=4, sticky='NS', **_GRID_CFG2)
+        #
+        self.p7x_btn = tk.Button(lbfr_0, text="P7X (TBD)")
+        self.p7x_btn.grid(row=1, column=1, sticky='NS', **_GRID_CFG2)
+        #
+        self.etch_btn = tk.Button(lbfr_0, text="etch (TBD)")
+        self.etch_btn.grid(row=1, column=2, sticky='NS', **_GRID_CFG2)
+        #
         self.lbfr = tk.LabelFrame(parent, text=" Net Structure ")
         self.lbfr.pack()
         tk.Label(self.lbfr, text="layerID").grid(row=0, column=0, **_GRID_CFG1)    
@@ -237,6 +248,7 @@ class CNNStructGUI(tk.Frame, object):
         
         for i, (sk, k, c, a, s) in enumerate(zip(skips, kerns, chans, actfs, symms)):
             self.add_layer(sk=sk, k=k, c=c, a=a, s=s)
+        # button events
         self.update_struct_btn.config(command=self.update_btn_event_handle)
         self.add_layer_btn.config(command=lambda: self.add_layer())
         self.del_layer_btn.config(command=lambda: self.del_layer())
@@ -244,17 +256,9 @@ class CNNStructGUI(tk.Frame, object):
         self.oldBKM2_btn.config(command=self.load_bkm2_struct)
         self.unet66_btn.config(command=self.load_unet66_struct)
         self.resnet13_btn.config(command=self.load_resnet13_struct)
-        canvas_frame = tk.Frame(parent, bg='#000000')
-        canvas_frame.pack(fill='both')
-        canvas = tk.Canvas(canvas_frame, bg='white', width=400, height=200, 
-            scrollregion=(0,0,400,800))
-        scrollY = tk.Scrollbar(canvas_frame, orient='vertical')
-        scrollY.pack(side='right', fill='y')
-        canvas.config(yscrollcommand=scrollY.set)
-        canvas.pack()
-        canvas.create_text(100,50, text="add network graph later")
-        
-    
+        #self.draw_cnn = cnngraphv.MyDraw(parent, height=200, width=800)
+
+   
     def load_simple_net(self):
         num_layers = 1+self.layer_id
         for _ in range(num_layers):
@@ -322,13 +326,13 @@ class CNNStructGUI(tk.Frame, object):
     def add_layer(self, sk=-1, k=1, c=1, a='linear', s='off'):
         # single layer setting
         self.layer_id = self.layer_id + 1
-        tkvar_skip = tk.IntVar()
+        tkvar_skip = tk.IntVar()      # not allow split
         #tkvar_kern = tk.IntVar() 
         #tkvar_chan = tk.IntVar()
         tkvar_kern = tk.StringVar()   # allow split 
         tkvar_chan = tk.StringVar()   # allow split
-        tkvar_actf = tk.StringVar()
-        tkvar_symm = tk.StringVar()
+        tkvar_actf = tk.StringVar()   # allow split
+        tkvar_symm = tk.StringVar()   # allow split
         tkvar_skip.set(sk)
         tkvar_kern.set(k)
         tkvar_chan.set(c)
@@ -361,8 +365,8 @@ class CNNStructGUI(tk.Frame, object):
         wid_symm = ttk.Combobox(self.lbfr, width=14,
             values=['all', 'xy_mirror', 'off'], textvariable=tkvar_symm)
         wid_symm.grid(row=self.layer_id+2, column=5, **_GRID_CFG1)
-        
         self.en_widgets.append([wid_skip, wid_kern, wid_chan, wid_actf, wid_symm])
+
 
     def update_btn_event_handle(self):
         self.get_cnn_struct_values()
@@ -381,7 +385,6 @@ class CNNStructGUI(tk.Frame, object):
 
 
     def get_cnn_struct_values(self):
-        orig_stdout = sys.stdout
         self.struct_values_combo = []
         self.skips_value = [_.get() for _ in self.skip_vars]
         self.kerns_value = [_.get() for _ in self.kern_vars]
@@ -389,7 +392,7 @@ class CNNStructGUI(tk.Frame, object):
         self.actfs_value = [_.get() for _ in self.actf_vars]
         self.symms_value = [_.get() for _ in self.symm_vars]
 
-        # handle on kernel size splits
+        # handle on splits
         kern_combo_status = self.tkvar_kernCrossAllCheck.get()
         chan_combo_status = self.tkvar_chanCrossAllCheck.get()
         actf_combo_status = self.tkvar_actfCrossAllCheck.get()
@@ -401,36 +404,14 @@ class CNNStructGUI(tk.Frame, object):
         symms_combo = self.struct_splits(self.symms_value, combo_all=symm_combo_status)
         kerns_combo = [list(map(int , x)) for x in kerns_combo]
         chans_combo = [list(map(int , x)) for x in chans_combo]  
-        """
-        for j, k in enumerate(self.kerns_value):
-            # j-th layer, kernel size = k or string 
-            if "," in k:
-                self.kerns_value[j] = list(map(int, k.split(",")))
-                kerns_combo_type="p"
-            elif ";" in k:
-                self.kerns_value[j] = list(map(int, k.split(";")))
-                kerns_combo_type="z"
-            else:
-                self.kerns_value[j] = [int(k)]
-        if kerns_combo_type=="p":
-            kerns_combo = list(itertools.product(*self.kerns_value))
-        elif kerns_combo_type="z":
-            max_splits = max([len(x) for x in self.kerns_value])
 
-        for i, c in enumerate(self.chans_value):
-            if not hasattr(c, '__iter__'):
-                self.chans_value[i] = [int(c)]
-            else:
-                self.chans_value[i] = list(map(int, c.split(",")))
-        chans_combo = list(itertools.product(*self.chans_value))
-        """
         all_nets_combo = list(itertools.product(
             [self.skips_value],
             kerns_combo,
             chans_combo,
             actfs_combo,
             symms_combo))
-        print(len(all_nets_combo))
+        #print(len(all_nets_combo))
         
         if len(all_nets_combo)==1:
             tk.StringVar(name=self.yamlkey_skips).set(self.skips_value)
@@ -441,22 +422,11 @@ class CNNStructGUI(tk.Frame, object):
             self.update_util.nets_combo = None
         else:
             self.update_util.nets_combo = np.array(all_nets_combo, dtype=object)
-            data=[]
-            for i, t in enumerate(self.update_util.nets_combo):
-                sid = str(i+1).zfill(4)
-                df = pd.DataFrame(t, index=["SKIP", "KERN", "CHAN", "ACTF", "SYMM"])
-                df = pd.concat([df], names=["split ID"], keys=[sid])
-                data.append(df)
-            dfall = pd.concat(data)
+            df = self.update_util.print_nets_df(self.update_util.nets_combo)
             pd.set_option('display.max_rows', None)
             pd.set_option('display.max_columns', None)
             pd.set_option('display.width', None)
-            print(dfall)
-            print("network_splits_table.txt is saved")
-            with open('network_splits_table.txt', 'w') as f:
-                sys.stdout = f
-                print(dfall)
-                sys.stdout = orig_stdout
+            print(df)
 
 
 class UpdateUtil(object):
@@ -467,6 +437,7 @@ class UpdateUtil(object):
         self.saveto_fn = tk.StringVar()
         self.saveto_fn.set('test_out.yaml')
         self.nets_combo = None
+        self.epetrhps_combos = None
         self.yamlkey_kerns = "TRAINING|CNN|STRUCTURE|KERNEL_SIZE"
         self.yamlkey_chans = "TRAINING|CNN|STRUCTURE|CHANNELS"
         self.yamlkey_actfs = "TRAINING|CNN|STRUCTURE|ACTIVATION_FUNCTIONS"
@@ -509,19 +480,76 @@ class UpdateUtil(object):
             udict = reduce(lambda x,y: {y:x}, reversed(yamlkey_list))
             nestdict_update(self.yamldict, udict)
 
+    def print_nets_df(self, nets_combo):
+        data=[]
+        for i, t in enumerate(nets_combo):
+            sid = str(i+1).zfill(4)
+            df = pd.DataFrame(t, index=["SKIP", "KERN", "CHAN", "ACTF", "SYMM"])
+            df = pd.concat([df], names=["ID"], keys=[sid])
+            data.append(df)
+        dfall = pd.concat(data)
+        return dfall
+    
+    def print_epehps_df(self, epetrhps_combo):
+        cols = ['BATCH_SIZE', 'BASE_LR', 'REG_L2', 
+            'REG_POWER', 'REG_CURV_POWER', 'SLOPE_ENHANCEMENT']
+        df = pd.DataFrame(epetrhps_combo, columns=cols)
+        df['ID'] = [str(_).zfill(4) for _ in df.index.values+1]
+        df.set_index("ID", inplace=True)
+        return df
         
     def imgtr_hp_update(self):
         new_kv = [("TRAINING|CNN|IMAGE_TRAINING|"+k, v) for (k, v) in self.imgkv]
         for (k, v) in new_kv:
             self.all_yamlkeys_to_tkvars[k].set(v.get())
    
-    def epetr_hp_update(self):
-        for k, v in self.epekv:
-          print(k, type(k), v, type(v) )
-          
-        new_kv = [("TRAINING|CNN|EPE_TRAINING|"+k, v) for (k, v) in self.epekv]
-        for (k, v) in new_kv:
-            self.all_yamlkeys_to_tkvars[k].set(v.get())
+    def epetr_hps_update(self):
+        d1 = self.newfr_epe_key2var 
+        d2 = self.newfr_epe_key2ens
+        key_bt = 'HYPER_PARAMETERS|BATCH_SIZE'
+        key_l2 = 'HYPER_PARAMETERS|REG_L2'
+        key_blr = 'HYPER_PARAMETERS|LEARNING_RATE|BASE_LR'
+        key_pow = 'HYPER_PARAMETERS|REG_POWER'
+        key_curv = 'HYPER_PARAMETERS|REG_CURV_POWER'
+        key_slp = 'HYPER_PARAMETERS|SLOPE_ENHANCEMENT'
+        orange_list = [key_bt, key_l2, key_pow, key_curv, key_slp, key_blr]
+        for (k, v) in d1.items():
+            name = "TRAINING|CNN|EPE_TRAINING|" + k        
+            if k in orange_list:
+                try:
+                    v.get()
+                    self.all_yamlkeys_to_tkvars[name].set(v.get())
+                except:
+                    continue
+            else:
+                self.all_yamlkeys_to_tkvars[name].set(v.get())
+        # batch size
+        _bt = d2[key_bt].get()
+        _bt = list(map(int, _bt.split(",")))
+        # reg L2
+        _l2 = d2[key_l2].get()
+        _l2 = list(map(float, _l2.split(",")))
+        # base lr
+        _blr = d2[key_blr].get()
+        _blr = list(map(float, _blr.split(",")))
+        # reg power
+        _pow = d2[key_pow].get()
+        _pow = list(map(float, _pow.split(",")))
+        # reg curv power
+        _curv = d2[key_curv].get()
+        _curv = list(map(float, _curv.split(",")))
+        # slope
+        _slp = d2[key_slp].get()
+        _slp = list(map(float, _slp.split(",")))
+        _split_list = [_bt, _blr, _l2, _pow, _curv, _slp]
+        self.epetrhps_combos = list(itertools.product(*_split_list))
+        df = self.print_epehps_df(self.epetrhps_combos)
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', None)
+        print(df)
+
+             
 
     def open_imgtr_gui(self):
         root = tk.Toplevel()
@@ -542,10 +570,10 @@ class UpdateUtil(object):
         epetr_dict = self.yamldict['TRAINING']['CNN']['EPE_TRAINING']
         newfr = AppFrame(master=root, app_name='epetr')
         newfr.show_next(root, epetr_dict)
-        self.epekv = newfr.yamlkeys_to_tkvars
-        #self.epetr_hp_update()
+        self.newfr_epe_key2var = dict(newfr.yamlkeys_to_tkvars)
+        self.newfr_epe_key2ens = dict(newfr.entry_widgets)
         tk.Button(root, text="Update Setting", 
-            command=self.epetr_hp_update).grid(columnspan=5)
+            command=self.epetr_hps_update).grid(columnspan=5)
 
 
 def single_yaml_saveto(update_util):
@@ -555,6 +583,7 @@ def single_yaml_saveto(update_util):
         
         
 def nets_combo_export(update_util):
+    orig_stdout = sys.stdout
     save_dir = filedialog.askdirectory(initialdir='~/')
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
@@ -565,6 +594,16 @@ def nets_combo_export(update_util):
     update_util.yaml_update()
     fn, ext = os.path.splitext(update_util.saveto_fn.get())
     print(update_util.nets_combo.shape)
+    df = update_util.print_nets_df(update_util.nets_combo)
+    print("network_splits_table.txt is saved to {}".format(save_dir))
+    with open(os.path.join(save_dir, 'network_splits_table.txt'), 'w') as f:
+        sys.stdout = f
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', None)
+        print(df)
+        sys.stdout = orig_stdout
+        
     for i, t in enumerate(update_util.nets_combo):
         tid = str(i+1).zfill(4)
         new_fn = fn+"-struct-"+tid+ext
@@ -584,10 +623,52 @@ def nets_combo_export(update_util):
             yaml.dump(update_util.yamldict, f, sort_keys=False)
         scripts.append(" ".join(['adv_modeling', '-tr', new_fn, '--gpu', '\n']))
         scripts.append("sleep 30 ; rm -rf .proj ; sleep 10 \n")
-    with open(os.path.join(save_dir, 'run_all_yamls.sh'), 'w') as f:
+    with open(os.path.join(save_dir, 'run_all_cnnNets_yamls.sh'), 'w') as f:
         f.writelines(scripts)
-    os.chmod(os.path.join(save_dir, './run_all_yamls.sh'), 0o0777)
+    os.chmod(os.path.join(save_dir, './run_all_cnnNets_yamls.sh'), 0o0777)
     
+
+def epetrhps_combos_export(update_util):
+    orig_stdout = sys.stdout
+    save_dir = filedialog.askdirectory(initialdir='~/')
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+        save_dir = os.path.abspath(save_dir)
+    print("all EPE_TRAINING hyper-parameters split yamls are saved in {}".format(save_dir))
+    scripts = []
+    assert update_util.epetrhps_combos is not None
+    update_util.yaml_update()
+    fn, ext = os.path.splitext(update_util.saveto_fn.get())
+
+    df = update_util.print_epehps_df(update_util.epetrhps_combos)
+    print("epe_train_HPs_splits_table.txt is saved to {}".format(save_dir))
+    with open(os.path.join(save_dir, 'epe_train_HPs_splits_table.txt'), 'w') as f:
+        sys.stdout = f
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', None)
+        print(df)
+        sys.stdout = orig_stdout
+        
+    pname = "TRAINING|CNN|EPE_TRAINING|HYPER_PARAMETERS|"
+    for i, t in enumerate(update_util.epetrhps_combos):
+        tid = str(i+1).zfill(4)
+        new_fn = fn+"-epe_train_HPs-"+tid+ext
+        
+        tk.StringVar(name=pname+"BATCH_SIZE").set(t[0])
+        tk.StringVar(name=pname+"|LEARINING_RATE|BASE_LR").set(t[1])
+        tk.StringVar(name=pname+"REG_L2").set(t[2])
+        tk.StringVar(name=pname+"REG_POWER").set(t[3])
+        tk.StringVar(name=pname+"REG_CURV_POWER").set(t[4])
+        tk.StringVar(name=pname+"SLOPE_ENHANCEMENT").set(t[5])
+        update_util.yaml_update()
+        with open(os.path.join(save_dir, new_fn), 'w') as f:
+            yaml.dump(update_util.yamldict, f, sort_keys=False)
+        scripts.append(" ".join(['adv_modeling', '-tr', new_fn, '--gpu', '\n']))
+        scripts.append("sleep 30 ; rm -rf .proj ; sleep 10 \n")
+    with open(os.path.join(save_dir, 'run_all_epetr_splits_yamls.sh'), 'w') as f:
+        f.writelines(scripts)
+    os.chmod(os.path.join(save_dir, './run_all_epetr_splits_yamls.sh'), 0o0777)
 
 def open_cnn_gui(update_util):
     root = tk.Toplevel()
@@ -657,7 +738,7 @@ def main():
         app.show_next(parent=app, nestdict=yamldict[tab_name])
         all_yamlkeys_to_tkvars.extend(app.yamlkeys_to_tkvars)
         all_entry_widgets.extend(app.entry_widgets)
-        for en in app.entry_widgets:
+        for (i, en) in app.entry_widgets:
             if en.winfo_parent().endswith('server_settings'):
                 en.config(state='disable')
         notebook.add(app, text=tab_name)
@@ -676,9 +757,15 @@ def main():
     top_btn.grid(row=0, column=0, **_GRID_CFG1)
     top_en = tk.Entry(topfr, textvariable=update_util.saveto_fn)
     top_en.grid(row=0, column=1, **_GRID_CFG1)
+    # net splits export
     tk.Button(topfr, text="network splits export all",
         command=lambda: nets_combo_export(update_util)).grid(
             row=0, column=2, **_GRID_CFG1) 
+    # epe train HPs splits export
+    tk.Button(topfr, text="EPE train HPs splits export all",
+        command=lambda: epetrhps_combos_export(update_util)).grid(
+            row=0, column=3, **_GRID_CFG1) 
+    
     
     nbname=notebook._name
     # customize DATABASE tab GUI
