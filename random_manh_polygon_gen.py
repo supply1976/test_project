@@ -92,7 +92,7 @@ def example2(save_dir, nums=100, save_to_jpg=True):
     for i in range(nums):
         img_name = os.path.join(save_dir, 'random_polygon_'+str(i+1).zfill(4)+'.jpg')
         p = create_random_pattern(
-            block_size=(32,32), num_blocks=4, min_rec_size=(4,4), periodic=False)
+            block_size=(32,32), num_blocks=4, min_rec_size=(4,4), periodic=True)
         im = Image.fromarray(p*255, 'L')
         if save_to_jpg:
             im.save(img_name)
@@ -108,7 +108,7 @@ def example2(save_dir, nums=100, save_to_jpg=True):
 
 if __name__=="__main__":
     #example1()
-    example2('random_patterns_1', nums=100)
+    example2('random_patterns_2', nums=100)
     plt.show()
 
 
