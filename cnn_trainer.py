@@ -19,18 +19,24 @@ tf.get_logger().setLevel('ERROR')
 
 
 class SkipConv(keras.layers.Layer):
-    def __init__(self, cropping, channel):
-        super().__init__()
+    def __init__(self, cropping, channel, **kwargs):
+        super().__init__(**kwargs)
         self.cropping = cropping
         self.channel = channel
         self.myCrop2D = keras.layers.Cropping2D(cropping=cropping)
-        self.conv2D1x1 = keras.layers.Conv2D(filters=channel, kernel_size=1, 
-            activation=None)
+        self.conv2D1x1 = keras.layers.Conv2D(
+            filters=channel, kernel_size=1, activation=None,
+            kernel_regularizer=keras.regularizers.l2(0.001))
 
     def call(self, inputs):
         input_crop = self.myCrop2D(inputs)
         output = self.conv2D1x1(input_crop)
         return output
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"cropping": self.cropping, "channel": self.channel})
+        return config
 
 
 class TimeCallBack(tf.keras.callbacks.Callback):
@@ -63,6 +69,7 @@ def build_model(img_size, kerns, chans, skips, actfs, dilas=None):
             filters=c, 
             dilation_rate=d, 
             activation=a, 
+            kernel_regularizer=keras.regularizers.l2(0.001),
             name="CBA_"+str(i))
         y = _CBA(outputs[-1])
         outputs.append(y)
@@ -88,7 +95,7 @@ def build_model(img_size, kerns, chans, skips, actfs, dilas=None):
 
 def main():
     img_size = 205
-    num_images = 2174
+    num_images = 1000  ; #98689
     timetaken = TimeCallBack()
     """
     # UNet_new
@@ -97,7 +104,6 @@ def main():
     DILATIONS= [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     SKIPS    = [-1,-1, 0,-1,-1, 3, 5, 4, 3, 2, 1, 0,-1]
     ACTIVATIONS = ['softplus']*12 + ['linear']
-    """
 
     # UNet66
     #KERNELS =  [41,37,31,29,23,19, 1, 1, 1, 1, 1, 1]
@@ -107,26 +113,35 @@ def main():
     DILATIONS= [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     SKIPS    = [-1, 0,-1, 2,-1, 4, 5, 4, 3, 2, 1,-1]
     ACTIVATIONS = ['softplus']*11 + ['linear']
+    """
 
     # resnet753 (small kernel CNN BKM)
-    #KERNELS =  [ 7, 5, 3, 7, 5, 3, 7, 5, 3, 7, 5, 3, 1]
-    #CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
-    #DILATIONS= [ 5, 3, 1, 5, 3, 1, 5, 3, 1, 5, 3, 1, 1]
-    #SKIPS    = [-1,-1, 0,-1,-1, 3,-1,-1, 6,-1,-1, 9, 0]
-    #ACTIVATIONS = ['softplus']*12 + ['linear']
+    KERNELS =  [ 7, 5, 3, 7, 5, 3, 7, 5, 3, 7, 5, 3, 1]
+    CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
+    DILATIONS= [ 5, 3, 1, 5, 3, 1, 5, 3, 1, 5, 3, 1, 1]
+    SKIPS    = [-1,-1, 0,-1,-1, 3,-1,-1, 6,-1,-1, 9, 0]
+    ACTIVATIONS = ['softplus']*12 + ['linear']
     
     cnnModel = build_model(img_size, KERNELS, CHANNELS, SKIPS, ACTIVATIONS, DILATIONS)
     cnnModel.summary()
     cnnModel.compile(loss='mse', optimizer='adam')
     
+    #configs = cnnModel.get_config()
+    #for layer_config in configs['layers']:
+    #    for k in layer_config.keys():
+    #        print(k, layer_config[k])
+    
     try:
         plot_model(cnnModel, to_file="./model_graph.png", show_shapes=True, show_layer_names=True)
     except:
         pass
-
+    
+    #out_size = img_size - sum(KERNELS) + len(KERNELS)
+    #output_shape = [out_size, out_size, 1]
     output_shape = cnnModel.compute_output_shape((1, img_size, img_size,2)).as_list()[1:]
-    input_images = np.random.rand(num_images, img_size, img_size, 2)
-    target_images = np.random.rand(num_images, *output_shape)
+    input_images = np.random.rand(num_images, img_size, img_size, 2).astype(np.float32)
+    target_images = np.random.rand(num_images, *output_shape).astype(np.float32)
+    print(input_images.dtype, target_images.dtype)
     
     t0 = time.time()
     cnnModel.fit(
@@ -135,6 +150,7 @@ def main():
         epochs=10, 
         batch_size=64, 
         verbose=1,
+        validation_split=0.2,
         callbacks=[timetaken])
     
     deltaT = time.time() - t0
@@ -142,6 +158,7 @@ def main():
     print("training time: ")
     print("  input shape = {}, output shape ={}, time elapsed={} seconds".format(
         input_images.shape, target_images.shape, np.round(deltaT, 2)))
+
 
 main()
 
