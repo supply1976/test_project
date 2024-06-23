@@ -60,7 +60,7 @@ class MyDraw(tk.Frame):
 
 
     def draw_conv2d_block(self, x0, y0, size=50, text='Conv2D',
-        actf=False, out_len=20, out_width=4, out_dir='s'):
+        actf=False, out_len=30, out_width=4, out_dir='s'):
         """
         ul: upper-left
         lr: lower-right
@@ -120,14 +120,19 @@ class MyDraw(tk.Frame):
         else:
             self.canvas.create_arc(ulx, uly, lrx, lry, width=2, start=st, extent=ext, style=tk.ARC)
     
-    def cnn(self, x0, y0, num_conv=6, skips=None, flowdir='e'):
+    def cnn(self, x0, y0, num_conv=6, block_text=None, skips=None, flowdir='e'):
         # input node
-        x1, y1 = self.draw_node(x0, y0, dr=3, text="vt0 (input image)", 
-            out_len=30, out_width=1, out_dir=flowdir)
+        x1, y1 = self.draw_node(x0, y0, dr=3, text="input image", 
+            out_len=40, out_width=1, out_dir=flowdir)
         # conv2d layers
         coords=[(x1, y1)]
+
         for i in range(num_conv):
-            xf, yf = self.draw_conv2d_block(*coords[-1], actf=True, out_dir=flowdir)
+            if block_text is None:
+                _text = "Conv2D"
+            else:
+                _text = block_text[i]
+            xf, yf = self.draw_conv2d_block(*coords[-1], actf=True, text=_text, out_width=4, out_dir=flowdir)
             coords.append((xf, yf))
         # draw skips
         if skips is not None:
@@ -135,16 +140,17 @@ class MyDraw(tk.Frame):
             for j in range(0, num_conv, skips):    
                 self.draw_skip_arc(*coords[j], *coords[j+skips], dr=60, out_dir=flowdir)
         # final 1x1 layer linear sum
-        x8, y8 = self.draw_conv2d_block(xf, yf, out_dir=flowdir, size=20, text='1x1', out_len=40, out_width=1)
+        x8, y8 = self.draw_conv2d_block(xf, yf, out_dir=flowdir, size=34, text='(1,1)', out_len=40, out_width=1)
         # output node
         flowdir = 'n' if flowdir=='s' else flowdir
-        self.draw_node(x8, y8, dr=3, text="final output", out_len=10, out_width=1, out_dir='w')
+        self.draw_node(x8, y8, dr=3, text="model output", out_len=10,
+        out_width=1, out_dir='w')
         #mydraw.draw_skip_arc(x0, y0+15, x8, y8-15, dr=70, ifdash=True, out_dir='n')
 
 
     def cnnMLP(self, x0, y0, num_conv=6, skips=None, flowdir='e'):
         # input node
-        x1, y1 = self.draw_node(x0, y0, dr=3, text="vt0 (input image)", 
+        x1, y1 = self.draw_node(x0, y0, dr=3, text="input image", 
             out_len=30, out_width=1, out_dir=flowdir)
         # conv2d layers
         coords=[(x1, y1)]
@@ -165,13 +171,13 @@ class MyDraw(tk.Frame):
         xf, yf = self.draw_conv2d_block(xf, yf, out_dir=flowdir, size=20, text='1x1', out_len=40, out_width=1)      
         # output node
         flowdir = 'n' if flowdir=='s' else flowdir
-        self.draw_node(xf, yf, dr=3, text="final output", out_len=0, out_width=1, out_dir=flowdir)
+        self.draw_node(xf, yf, dr=3, text="model output", out_len=0, out_width=1, out_dir=flowdir)
         mydraw.draw_skip_arc(ann_x0, ann_y0, xf, yf, dr=60, ifdash=True, out_dir='e')
 
 
     def unet_type1(self, x0, y0, num_conv=6, skips=None, flowdir='e'):
         # input node
-        x1, y1 = self.draw_node(x0, y0, dr=3, text="vt0 (input image)", 
+        x1, y1 = self.draw_node(x0, y0, dr=3, text="input image", 
             out_len=30, out_width=1, out_dir=flowdir)
         # conv2d layers
         coords=[(x1, y1)]
@@ -185,7 +191,8 @@ class MyDraw(tk.Frame):
                 self.draw_skip_arc(*coords[j], *coords[j+skips], dr=60, out_dir=flowdir)
         # create equal number of 1x1 layers as num_conv
         for j in range(num_conv):
-            xf, yf = self.draw_conv2d_block(xf, yf, out_dir=flowdir, size=20, text='1x1', out_len=30, out_width=1)
+            xf, yf = self.draw_conv2d_block(xf, yf, out_dir=flowdir, size=40,
+            text=None, out_len=30, out_width=2)
             coords.append((xf, yf))
         for j in range(1, num_conv):
             self.draw_skip_arc(*coords[j], *coords[2*num_conv-j], dr=100-j*10, st=0, ext=180, out_dir='e')
@@ -195,35 +202,44 @@ class MyDraw(tk.Frame):
         #self.draw_skip_arc(*coords[5], *coords[-6], dr=60, st=0, ext=180, out_dir='e')
         # output node
         flowdir = 'n' if flowdir=='s' else flowdir
-        self.draw_node(xf+10, yf, dr=3, text="final output", out_len=10, out_width=1, out_dir='w')
+        self.draw_node(xf+10, yf, dr=3, text="model output", out_len=10, out_width=1, out_dir='w')
 
     def unet_Vview(self, x0, y0, num_conv=6, skips=None, flowdir='s'):
         # input node
-        x1, y1 = self.draw_node(x0, y0, dr=3, text="vt0 (input image)", 
+        x1, y1 = self.draw_node(x0, y0, dr=3, text="input image", 
             out_len=30, out_width=1, out_dir=flowdir)
         # conv2d layers
         coords=[(x1, y1)]
+        enc_k = [19,41,23,37,29,31]
+        enc_c = [2,2,4,4,4,4]
+        _text = list(map(str, zip(enc_k, enc_c)))
         for i in range(num_conv):
-            xf, yf = self.draw_conv2d_block(*coords[-1], actf=False, out_dir=flowdir)
+            xf, yf = self.draw_conv2d_block(*coords[-1], text=_text[i], actf=True, out_dir=flowdir)
             if i==num_conv-1:
-                self.draw_multi_lines(xf, yf, xf+100, yf, out_dir='e', width=3)
+                self.draw_multi_lines(xf, yf, xf+150, yf, out_dir='e', width=3)
             else:
-                self.draw_multi_lines(xf, yf-10, xf+100, yf-10, out_dir='e', width=3)
+                self.draw_multi_lines(xf, yf-10, xf+150, yf-10, out_dir='e', width=3)
             coords.append((xf, yf))
-        self.draw_multi_lines(xf+100, yf, xf+100, yf-38, width=3, out_dir='n')
+        self.draw_multi_lines(xf+150, yf, xf+150, yf-28, width=3, out_dir='n')
         # draw skips
         if skips is not None:
             assert type(skips) is int
             for j in range(0, num_conv, skips):    
                 self.draw_skip_arc(*coords[j], *coords[j+skips], dr=60, out_dir=flowdir)
         # create equal number of 1x1 layers as num_conv
-        xf, yf = (xf+100, yf-40)
+        xf, yf = (xf+150, yf-30)
+        dec_c = [4,4,4,8,8,1]
         for j in range(num_conv):
             if j==num_conv-1:
                 w=1
+                _text = "(1,1)"
+                actf = False
             else:
                 w=3
-            xf, yf = self.draw_conv2d_block(xf, yf, out_dir='n', actf=True, size=20, text='1x1', out_len=50, out_width=w)
+                _text = "(1,{})".format(dec_c[j])
+                actf = False
+            xf, yf = self.draw_conv2d_block(xf, yf, out_dir='n', actf=actf,
+            size=50, text=_text, out_len=30, out_width=w)
             coords.append((xf, yf))
         #for j in range(1, num_conv):
         #    self.draw_skip_arc(*coords[j], *coords[2*num_conv-j], dr=100-j*10, st=0, ext=180, out_dir='e')
@@ -232,7 +248,7 @@ class MyDraw(tk.Frame):
         #self.draw_skip_arc(*coords[4], *coords[-5], dr=70, st=0, ext=180, out_dir='e')
         #self.draw_skip_arc(*coords[5], *coords[-6], dr=60, st=0, ext=180, out_dir='e')
         # output node
-        self.draw_node(xf, yf, dr=5, text="final output", out_len=10, out_width=1, out_dir='s')   
+        self.draw_node(xf, yf, dr=5, text="model output", out_len=10, out_width=1, out_dir='s')   
 
 if __name__=="__main__":
     root = tk.Tk()
@@ -243,33 +259,33 @@ if __name__=="__main__":
     
     # simple cnn, no skip
     mydraw.canvas.create_text(40, 40, text="simple CNN, no skip",  anchor='nw', font=16)
-    mydraw.cnn(x0=150, y0=100, skips=None, num_conv=6, flowdir='e')
+    mydraw.cnn(x0=150, y0=100, skips=None, num_conv=4, flowdir='e')
     
     # sequential resNet, 2 or 3 conv2d form a resNetBlock
     mydraw.canvas.create_text(40, 180, 
         text="sequantial resNet CNN, 2 or 3 Conv2D() form a resNetBlock",  anchor='nw', font=16)
-    mydraw.cnn(x0=150, y0=240, skips=2, num_conv=6, flowdir='e')
-    mydraw.cnn(x0=800, y0=240, skips=2, num_conv=6, flowdir='e')
-    mydraw.draw_skip_arc(903, 240, 1043, 240, dr=60, out_dir='e', st=0, ext=180)
-    mydraw.draw_skip_arc(1043, 240, 1183, 240, dr=60, out_dir='e', st=0, ext=180)
-    mydraw.draw_skip_arc(1183, 240, 1300, 240, dr=60, out_dir='e', st=0, ext=180)
+    #mydraw.cnn(x0=150, y0=240, skips=2, num_conv=6, flowdir='s')
+    enc_k = [19,41,23,37,29,31]
+    enc_c = [2, 2, 4, 4, 4, 4]
+    mydraw.cnn(x0=300, y0=240, skips=2, block_text=list(map(str, zip(enc_k, enc_c))), num_conv=6, flowdir='e')
+    # chain-type resnet
+    #mydraw.cnn(x0=800, y0=300, skips=2, num_conv=6, flowdir='e')
+    #mydraw.draw_skip_arc(915, 300, 1075, 300, dr=60, out_dir='e', st=0, ext=180)
+    #mydraw.draw_skip_arc(1075, 300, 1235, 300, dr=60, out_dir='e', st=0, ext=180)
+    #mydraw.draw_skip_arc(1235, 300, 1395, 300, dr=60, out_dir='e', st=0, ext=180)
     #mydraw.cnn(x0=800, y0=240, skips=3, num_conv=6, flowdir='e')
     
     # sequential resNet + ANN
-    mydraw.canvas.create_text(40, 380, 
-        text="sequential resNet CNN + 3-layer MLP (ANN)",  anchor='nw', font=16)
-    mydraw.cnnMLP(x0=150, y0=450, skips=2, num_conv=6, flowdir='e')
+    #mydraw.canvas.create_text(40, 380, 
+    #    text="sequential resNet CNN + 3-layer MLP (ANN)",  anchor='nw', font=16)
+    #mydraw.cnnMLP(x0=150, y0=450, skips=2, num_conv=6, flowdir='e')
     
     # UNet-like CNN
     mydraw.canvas.create_text(40, 600, 
         text="UNet-like CNN (adaptive sum of CNNs from deep to shallow)", anchor='nw', font=16) 
     mydraw.unet_type1(x0=100, y0=750, skips=2, num_conv=6, flowdir='e')
-    mydraw.unet_Vview(x0=1100, y0=500, skips=2, num_conv=6, flowdir='s')
+    mydraw.unet_Vview(x0=1200, y0=500, skips=2, num_conv=6, flowdir='s')
     #mydraw.cnn(x0=800, y0=50, skips=2, num_conv=6, flowdir='s')
-
-
-
-    flowdir='s'
 
 
     """

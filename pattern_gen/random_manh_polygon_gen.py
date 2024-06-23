@@ -4,48 +4,57 @@ import matplotlib as mpl
 mpl.rcParams['backend']='TkAgg'
 import matplotlib.pyplot as plt
 from PIL import Image
+from functools import reduce
 
 
-class TileBlock:
+class BlockUnit:
     def __init__(self, block_size=(32, 32)):
         # unit in pixel
-        self.block_h, self.block_w = block_size
+        self.block_size = block_size
         self.zero_block = np.zeros(shape=block_size, dtype=np.uint8)
 
 
-    def gen_rectangle(self, min_rec_size=(8, 8), random_empty=False):
+    def gen_random_rec(self, min_rec=(8, 8), max_rec=None):
         """
-        min_rec_size: unit in pixel
-        generate random rectangle within tile
-        by random integers for ll and ur coordinates
+        min_rec: unit in pixel
+        generate rectangle with random size between min_rec to block_size
         return: 
-        tile (2D int array with shape=tile_size) 
+        rec: 2D int array with shape = block_size 
         with value 1 (inside rectangle) or 0 (outside rectangle)
         """
+        rec = None
+        min_h, min_w = min_rec
+        if max_rec is None:
+            max_h, max_w = self.block_size
+        else:
+            max_h, max_w = max_rec
+        assert min_h in range(1, self.block_size[0]+1)
+        assert min_w in range(1, self.block_size[1]+1)
+        assert max_h > min_h
+        assert max_w > min_w
+        h = np.random.randint(min_h, max_h)
+        w = np.random.randint(min_w, max_w)
+        rec = np.ones(shape=(h, w), dtype=np.uint8)
+        # random pad zero to rec upto size = block_size
+        pad_n = np.random.randint(0, self.block_size[0]-h+1)
+        pad_s = self.block_size[0] - h - pad_n
+        pad_w = np.random.randint(0, self.block_size[1]-w+1)
+        pad_e = self.block_size[1] - w - pad_w
+        pad_width = [[pad_n, pad_s], [pad_w, pad_e]]
+        #print(rec.shape, pad_width)
+        rec = np.pad(rec, pad_width=pad_width)
+        assert rec.shape == self.block_size
+        return rec
+
+    def gen_random_block(self, min_rec, max_rec, nums_rec):
+        recs = None
         block = None
-        if min_rec_size is None:
-            return self.zero_block
-        h, w = min_rec_size
-        assert h in range(1, self.block_h+1)
-        assert w in range(1, self.block_w+1) 
-        x0 = np.random.randint(0, self.block_w - (w-1))
-        x1 = np.random.randint(x0 + (w-1), self.block_w)
-        y0 = np.random.randint(0, self.block_h - (h-1))
-        y1 = np.random.randint(y0 + (h-1), self.block_h)
-        # rectangle coordinates 
-        ll = (x0, y0)
-        ur = (x1, y1)
-        #print("ll={}, ur={}".format(ll, ur))
-        
-        # rectangle array
-        rec = np.ones(shape=(y1-y0+1, x1-x0+1), dtype=np.uint8)
-        # zero padding to rectangle array 
-        block = np.pad(rec, ((y0, self.block_h-y1-1), (x0, self.block_w-x1-1)))
-        assert block.shape == (self.block_h, self.block_w)
-        if random_empty:
-            rid = np.random.randint(2)
-            block = [block, self.zero_block][rid]
-        return block
+        if nums_rec > 1:
+            recs = [self.gen_random_rec(min_rec, max_rec) for _ in range(nums_rec)]
+            block = reduce(lambda a,b: np.logical_or(a,b).astype(np.uint8), recs)
+        else:
+            block = self.gen_random_rec(min_rec)
+        return (recs, block)
 
 
 def create_random_pattern(
@@ -107,23 +116,33 @@ def example2(save_dir, nums=100, save_to_jpg=True):
   
 
 if __name__=="__main__":
-    #example1()
-    example2('random_patterns_2', nums=100)
+    MIN_REC = (20, 5)
+    MAX_REC = (40,15)
+    BLOCK_SIZE = (64, 64)
+
+    bu = BlockUnit(BLOCK_SIZE)
+    #rec = bu.gen_random_rec(min_rec=MIN_REC)
+
+    blocks = []
+    for i in range(4):
+        _blocks=[]
+        for j in range(4):
+            _, block = bu.gen_random_block(min_rec=MIN_REC, max_rec=MAX_REC,
+            nums_rec=4)
+            _blocks.append(block)
+        blocks.append(_blocks)
+
+    p = np.block(blocks)
+    print(p.shape)
+
+    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(8,4))
+    axes[0].imshow(blocks[0][0])
+    axes[1].imshow(blocks[0][1])
+    axes[2].imshow(p)
     plt.show()
+    np.save("test_pattern.npy", p) 
+    #example1()
+    #example2('random_patterns_2', nums=100)
+    #plt.show()
 
 
-
-
-"""
-# example
-
-p = np.block([[p1, p2], [p3, p4]])
-im = Image.fromarray(p*255, 'L')
-im.save('random_pattern.jpg')
-plt.tight_layout()
-plt.show()
-
-
-# create 100 pattern, save to numpy array
-
-"""
