@@ -2,7 +2,7 @@ import os, sys, logging, argparse
 import numpy as np
 import pandas as pd
 import time
-os.environ['CUDA_VISIBLE_DEVICE']='0'
+os.environ['CUDA_VISIBLE_DEVICES']='0'
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import tensorflow as tf
 from tensorflow import keras
@@ -12,11 +12,13 @@ import matplotlib.pyplot as plt
 
 
 gpus = tf.config.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
+
+if len(gpus)>0:
+    [tf.config.experimental.set_memory_growth(gpu, True) for gpu in gpus]
+
 tf.get_logger().setLevel('ERROR')
 
 #tf.compat.v1.disable_eager_execution()
-
 
 
 def _makeSymConvKern(inputKernel4D, mode='XYTU'):
@@ -95,7 +97,6 @@ class SymConv2D(keras.layers.Conv2D):
     def call(self, inputs):
         # overwrite the call method
         self.sym_kernel = _makeSymConvKern(self.kernel, mode='XYTU')
-        #actf_name = self.get_config()['activation']
         outputs = tf.keras.backend.conv2d(
             inputs, 
             self.sym_kernel,
@@ -114,6 +115,7 @@ class SymConv2D(keras.layers.Conv2D):
 
 
 class SkipConv(keras.layers.Layer):
+    # using 1x1 Conv2D and Cropping2D() to do skip-connection
     def __init__(self, cropping, channel, **kwargs):
         super().__init__(**kwargs)
         self.cropping = cropping
@@ -187,6 +189,9 @@ def calc_spline_values(x, grid, spline_order):
 
 
 class BSplineACTF(keras.layers.Layer):
+    """
+    trainable activation functions using parameterized B-spline functions
+    """
     def __init__(self, 
                  out_channel=None, 
                  grid_size=5, 
@@ -197,7 +202,6 @@ class BSplineACTF(keras.layers.Layer):
         self.grid_size = grid_size
         self.spline_order = spline_order
         self.grid_range = grid_range
-        #self.kernel_shape = (self.spline_basis_size, self.input_channel)
         
     def build(self, input_shape):
         in_channel = input_shape[-1]
@@ -205,7 +209,7 @@ class BSplineACTF(keras.layers.Layer):
         self.spline_basis_size = self.grid_size + self.spline_order
         bound = self.grid_range[1] - self.grid_range[0]
 
-        # build grid (extention)
+        # build 1D Tensor grid (extention) 
         self.grid = tf.linspace(
             self.grid_range[0] - self.spline_order * bound / self.grid_size,
             self.grid_range[1] + self.spline_order * bound / self.grid_size,
@@ -215,7 +219,9 @@ class BSplineACTF(keras.layers.Layer):
             initial_value=tf.cast(self.grid, dtype=tf.float32),
             trainable=False,
             dtype=tf.float32,
-            name="spline_grd")
+            caching_device="GPU:0",
+            name="spline_grd",
+            )
 
         if self.out_channel is None:
             kernel_shape = (self.spline_basis_size, self.in_channel)
@@ -228,7 +234,9 @@ class BSplineACTF(keras.layers.Layer):
             shape=kernel_shape,
             initializer=tf.keras.initializers.RandomNormal(0.1),
             trainable=True,
-            dtype=tf.float32)
+            caching_device="GPU:0",
+            dtype=tf.float32,
+            )
 
     def call(self, inputs, *args, **kwargs):
         Bik = calc_spline_values(inputs, self.grid, self.spline_order)
@@ -311,37 +319,63 @@ def build_model(
     return model
 
 
-def main():
-    img_size = 205
-    num_images = 1000  ; #98689
-    timetaken = TimeCallBack()
-
+def netconfig():
+    # UNet66 (large kernel CNN BKM)
     """
-    # UNet66
     KERNELS =  [19,41,23,37,29,31, 1, 1, 1, 1, 1, 1]
     CHANNELS = [ 2, 2, 4, 4, 4, 4, 4, 4, 4, 8, 8, 1]
     DILATIONS= [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     SKIPS    = [-1, 0,-1, 2,-1, 4, 5, 4, 3, 2, 1,-1]
     ACTIVATIONS = ['softplus']*6 + ['linear']*6
+    """
     
     # resnet753 (small kernel CNN BKM)
     KERNELS =  [ 7, 5, 3, 7, 5, 3, 7, 5, 3, 7, 5, 3, 1]
-    CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
+    CHANNELS = [ 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1]
+    #CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
     DILATIONS= [ 5, 3, 1, 5, 3, 1, 5, 3, 1, 5, 3, 1, 1]
     SKIPS    = [-1,-1, 0,-1,-1, 3,-1,-1, 6,-1,-1, 9, 0]
     ACTIVATIONS = ['relu']*12 + ['linear']
-    """
+   
     # resnetL21
-    KERNELS =  [21,21, 1,21,21, 1,21,21, 1, 1]
-    CHANNELS = [ 4, 4, 4, 4, 4, 4, 4, 4,16, 1]
-    DILATIONS= [ 2, 1, 1, 2, 1, 1, 2, 1, 1, 1]
+    """
+    KERNELS =  [21,21,21,21,21,21,21,21,21, 1]
+    CHANNELS = [ 2, 2, 2, 2, 2, 2, 2, 2, 2, 1]
+    DILATIONS= None
     SKIPS    = [-1,-1, 0,-1,-1, 3,-1,-1, 6, 0]
     ACTIVATIONS = ['relu']*9 + ['linear']*1
+    """
 
-    #cnnModel = build_model(img_size, KERNELS, CHANNELS, SKIPS, ACTIVATIONS, DILATIONS)
+    return (KERNELS, CHANNELS, DILATIONS, SKIPS, ACTIVATIONS)
+
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dbfile', type=str, default=None)
+    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--training', action='store_true')
+    parser.add_argument('--enable_trainable_actfs', action='store_true')
+
+    FLAGS, _ = parser.parse_known_args()
+    
+    kerns, chans, dilas, skips, actfs = netconfig()
+    
+    trainable_actfs = False
+    if FLAGS.enable_trainable_actfs:
+        trainable_actfs = True
+
+    timetaken = TimeCallBack()
+    
     cnnModel = build_model(
-        img_size, KERNELS, CHANNELS, SKIPS, ACTIVATIONS, DILATIONS, 
-        trainable_actfs=True)
+        img_size=None, 
+        kerns=kerns, 
+        chans=chans, 
+        skips=skips, 
+        actfs=actfs,
+        dilas=dilas,
+        trainable_actfs=trainable_actfs)
     cnnModel.summary()
     cnnModel.compile(loss='mse', optimizer='adam')
     
@@ -354,29 +388,61 @@ def main():
         plot_model(cnnModel, to_file="./model_graph.png", show_shapes=True, show_layer_names=True)
     except:
         pass
-    
-    #out_size = img_size - sum(KERNELS) + len(KERNELS)
-    #output_shape = [out_size, out_size, 1]
-    output_shape = cnnModel.compute_output_shape((1, img_size, img_size, 1)).as_list()[1:]
-    input_images = np.random.rand(num_images, img_size, img_size, 1).astype(np.float32)
-    target_images = np.random.rand(num_images, *output_shape).astype(np.float32)
-    print(input_images.dtype, target_images.dtype)
-    
-    t0 = time.time()
-    cnnModel.fit(
-        x=input_images, 
-        y=target_images, 
-        epochs=10, 
-        batch_size=64, 
-        verbose=1,
-        validation_split=0.2,
-        callbacks=[timetaken])
-    
-    deltaT = time.time() - t0
+   
+    if FLAGS.dbfile is None:
+        print("use fake data for training flow test")
+        input_shape = (205, 205, 1)
+        inputs = np.random.rand(100, *input_shape).astype(np.float32)
+        labels = np.random.rand(100, *input_shape).astype(np.float32)
+        output_shape = cnnModel.compute_output_shape((1, *input_shape)).as_list()[1:]
+        in_size = input_shape[0]
+        out_size = output_shape[0]
+        if out_size == in_size:
+            labels_resize = labels
+        else:
+            i = (in_size-out_size)//2
+            labels_resized = labels[:, i:-i, i:-i, :]
 
-    print("training time: ")
-    print("  input shape = {}, output shape ={}, time elapsed={} seconds".format(
-        input_images.shape, target_images.shape, np.round(deltaT, 2)))
+    elif FLAGS.dbfile.endswith('npz'):
+        data = np.load(FLAGS.dbfile, allow_pickle=True)
+        print(list(data.keys()))
+        images = data['images']
+        vt_terms = data['vt_terms']
+        print(vt_terms)
+        inputs = np.expand_dims(images[:,:,:,1], axis=-1)
+        labels = np.expand_dims(images[:,:,:,0], axis=-1)
+        _, h, w, c = inputs.shape
+        assert h==w
+        input_shape = (h, w, c)
+        output_shape = cnnModel.compute_output_shape((1, *input_shape)).as_list()[1:]
+        out_size = output_shape[0]
+        i = (h - out_size)//2
+        labels_resized = labels[:, i:-i, i:-i, :]
+        #print(inputs.dtype, labels_resized.dtype)
+        
+    else:
+        print("{} not support yet".format(FLAGS.dbfile))
+        return 0
+    
+    print(inputs.shape, labels_resized.shape)
+    
+    if FLAGS.training:
+        t0 = time.time()
+        cnnModel.fit(
+            x=inputs,
+            y=labels_resized,
+            epochs=FLAGS.epochs,
+            batch_size=FLAGS.batch_size,
+            verbose=1,
+            validation_split=0.2,
+            callbacks=[timetaken])
+        deltaT = time.time() - t0
+
+        print("training completed")
+        print("  input shape = {}, output shape ={}, time elapsed={} seconds".format(
+            inputs.shape, labels.shape, np.round(deltaT, 2)))
+    else:
+        print("DO NOTHING")
 
 
 main()
