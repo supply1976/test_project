@@ -2,23 +2,14 @@ import os, sys, logging, argparse
 import numpy as np
 import pandas as pd
 import time
-os.environ['CUDA_VISIBLE_DEVICES']='0'
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.utils import plot_model
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-
-
-gpus = tf.config.list_physical_devices('GPU')
-
-if len(gpus)>0:
-    [tf.config.experimental.set_memory_growth(gpu, True) for gpu in gpus]
-
-tf.get_logger().setLevel('ERROR')
-
 #tf.compat.v1.disable_eager_execution()
+tf.get_logger().setLevel('ERROR')
 
 
 def _makeSymConvKern(inputKernel4D, mode='XYTU'):
@@ -96,7 +87,7 @@ class SymConv2D(keras.layers.Conv2D):
 
     def call(self, inputs):
         # overwrite the call method
-        self.sym_kernel = _makeSymConvKern(self.kernel, mode='XYTU')
+        self.sym_kernel = _makeSymConvKern(self.kernel, mode='XY')
         outputs = tf.keras.backend.conv2d(
             inputs, 
             self.sym_kernel,
@@ -168,7 +159,6 @@ def calc_spline_values(x, grid, spline_order):
         shape = [batch, h, w, c, ..., grid_size + spline_order].
         B_ik === B_k(x_i)  
     """
-    
     assert len(tf.shape(x)) >= 2
     
     # grid reshape for broadcasting
@@ -186,6 +176,96 @@ def calc_spline_values(x, grid, spline_order):
         bases = bases_1 + bases_2
     bases = tf.stack(tf.unstack(bases), axis=-1)
     return bases
+
+
+def gaus_bspline3(x, h):
+    """
+    Gaussian approximation of B-spline order 3 (uniform grid)
+    knots = [0, h, 2h, 3h, 4h]
+    """
+    # x: input nD tensor 
+    # h: grid resolution. float
+    x = (x- 2*h) / (h / 1.7)
+    y = 0.667 * tf.math.exp(-0.5 * x**2)
+    return y
+
+
+class ParamGausACTF(keras.layers.Layer):
+    """
+    trainable activation functions using parameterized Gaussian 1D function
+    
+    theory (inspired by KAN paper):
+    phi(x) -- unknown nonlinear activation funciton to be trained
+
+    orig: 
+    phi(x) = c0*B3_0(x) + c1*B3_1(x) + c2*B3_2(x) + ...
+    ci are trainable weights
+    {B3_i} for i = 0, 1, 2, ... is the set of B-Spline functions of order 3 
+    
+    approx:
+    under uniform grids (knots): [x0, x1, x2, x3, ...] , x_{i+1}-x_i === h
+    B-Splinee order 3 function can be well-approximated by gaus(), which is easy and fast
+    then phi(x) is parameterized by 
+    phi(x) = c0*G_i(x) + c1*G_i(x) + c2*G_i(x) + ...
+    G_i(x) = gaus_bspline3(x-xi, h)
+    """
+    def __init__(self,
+                 base_actf,
+                 depthwised=False,
+                 grid_range=(0, 1.0),
+                 num_basis = 11, 
+                 **kwargs):
+        super(ParamGausACTF, self).__init__(**kwargs)
+        self.base_actf = base_actf
+        self.depthwised = depthwised
+        self.grid_range = grid_range
+        self.num_basis = num_basis
+        assert self.num_basis >= 2
+
+        xL, xR = grid_range
+        uniform_grid = np.linspace(xL, xR, self.num_basis)
+        self.grid_resolution = uniform_grid[1] - uniform_grid[0]
+        # build 1D grid tensor
+        self.grid = tf.constant(uniform_grid, dtype=tf.float32)
+        self.dense1 = keras.layers.Dense(units=1, use_bias=False)
+
+    def build(self, input_shape):
+        in_channel = input_shape[-1]
+        self.in_channel = in_channel
+        
+        if self.depthwised:
+            self.actf_kernel = self.add_weight(
+                name="actf_kernel",
+                shape=(self.num_basis, self.in_channel),
+                initializer=keras.initializers.RandomNormal(stddev=1.0),
+                trainable=True,
+                #caching_device="GPU:0",
+                dtype=tf.float32,
+                )
+
+    def call(self, inputs, *args, **kwrags):
+        """
+        inputs: nD Tensor
+        """
+        # expand dim for broadcasting 
+        # self.grid is 1D Tensor, x and Ax are (n+1)D Tensor
+        x = tf.expand_dims(inputs, axis=-1)
+        Ax = gaus_bspline3(x-self.grid, self.grid_resolution)
+        if self.depthwised:
+            output = tf.einsum("...ik,ki->...i", Ax, self.actf_kernel)
+        else:
+            output = self.dense1(Ax)
+            output = tf.reduce_mean(output, axis=-1)
+        output = output + keras.layers.Activation(self.base_actf)(inputs)
+        return output
+
+    def get_config(self):
+        config = super(ParamGausACTF, self).get_config()
+        config.update({
+            "depthwised": self.depthwised,
+            "grid_range": self.grid_range,
+            "num_basis": self.num_basis,
+            })
 
 
 class BSplineACTF(keras.layers.Layer):
@@ -247,7 +327,7 @@ class BSplineACTF(keras.layers.Layer):
         return spline_out
 
     def get_config(self):
-        config = super(DenseKAN, self).get_config()
+        config = super(BSplineACTF, self).get_config()
         config.update({
             "out_channel": self.out_channel,
             "grid_size": self.grid_size,
@@ -263,10 +343,9 @@ def build_model(
     actfs, 
     dilas=None, 
     trainable_actfs=False,
-    grid_size=5,
-    spline_order=3,
-    grid_range=(-1.0,1.0),
-    out_channel=None
+    depthwised=False,
+    grid_range=(0.0,1.0),
+    num_basis=11,
     ):
     assert len(kerns)==len(chans)
     assert len(kerns)==len(skips)
@@ -286,18 +365,23 @@ def build_model(
             filters=c, 
             dilation_rate=d, 
             activation=None, 
-            #kernel_regularizer=keras.regularizers.l2(0.001),
+            use_bias=True,
+            kernel_regularizer=keras.regularizers.l2(1.0e-6),
             name="symconv_"+str(i))
+
         if trainable_actfs and i != layerID[-1]:
-            actf_layer = BSplineACTF(
-                out_channel=out_channel,
-                grid_size=grid_size,
-                spline_order=spline_order,
-                grid_range=grid_range)
+            actf_layer = ParamGausACTF(
+                base_actf=a,
+                grid_range=grid_range, 
+                num_basis=num_basis,
+                depthwised=depthwised,
+                )
         else:
             actf_layer = keras.layers.Activation(a)
+        
         y = conv_layer(outputs[-1])
         y = actf_layer(y)
+        
         outputs.append(y)
         
         # handle the skips
@@ -354,12 +438,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dbfile', type=str, default=None)
     parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--gpu_id', type=int, default=0)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--training', action='store_true')
     parser.add_argument('--enable_trainable_actfs', action='store_true')
-
     FLAGS, _ = parser.parse_known_args()
     
+    os.environ['CUDA_VISIBLE_DEVICES']=str(FLAGS.gpu_id)
+
+    gpus = tf.config.list_physical_devices('GPU')
+    if len(gpus)>0:
+        [tf.config.experimental.set_memory_growth(gpu, True) for gpu in gpus]
+    
+    # get network config
     kerns, chans, dilas, skips, actfs = netconfig()
     
     trainable_actfs = False
@@ -375,9 +466,15 @@ def main():
         skips=skips, 
         actfs=actfs,
         dilas=dilas,
-        trainable_actfs=trainable_actfs)
+        trainable_actfs=trainable_actfs,
+        depthwised=False,
+        grid_range=(0.0,1.0),
+        num_basis=10,
+        )
+    
     cnnModel.summary()
-    cnnModel.compile(loss='mse', optimizer='adam')
+    opt = keras.optimizers.Adam(learning_rate=0.0005)
+    cnnModel.compile(loss='mse', optimizer=opt)
     
     #configs = cnnModel.get_config()
     #for layer_config in configs['layers']:
@@ -391,7 +488,7 @@ def main():
    
     if FLAGS.dbfile is None:
         print("use fake data for training flow test")
-        input_shape = (205, 205, 1)
+        input_shape = (255, 255, 1)
         inputs = np.random.rand(100, *input_shape).astype(np.float32)
         labels = np.random.rand(100, *input_shape).astype(np.float32)
         output_shape = cnnModel.compute_output_shape((1, *input_shape)).as_list()[1:]
@@ -435,7 +532,8 @@ def main():
             batch_size=FLAGS.batch_size,
             verbose=1,
             validation_split=0.2,
-            callbacks=[timetaken])
+            #callbacks=[timetaken],
+            )
         deltaT = time.time() - t0
 
         print("training completed")
