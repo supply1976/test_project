@@ -105,32 +105,41 @@ class SymConv2D(keras.layers.Conv2D):
         return outputs
 
 
-class SkipConv(keras.layers.Layer):
-    # using 1x1 Conv2D and Cropping2D() to do skip-connection
-    def __init__(self, cropping, channel, **kwargs):
+class DenseCropSkip(keras.layers.Layer):
+    # using Dense() layer and Cropping2D() layer to do skip-connection
+    def __init__(self, cropping, channel, regL2=1.0e-6, **kwargs):
         super().__init__(**kwargs)
         self.cropping = cropping
         self.channel = channel
-        self.myCrop2D = keras.layers.Cropping2D(cropping=cropping)
-        self.conv2D1x1 = keras.layers.Conv2D(
-            filters=channel, kernel_size=1, activation=None,
-            kernel_regularizer=keras.regularizers.l2(0.001))
+        self.regL2 = regL2
+        self.crop2D = keras.layers.Cropping2D(cropping=cropping)
+        self.dense = keras.layers.Dense(
+            units=channel, activation=None, use_bias=False,
+            kernel_regularizer=keras.regularizers.l2(regL2))
 
     def call(self, inputs):
-        input_crop = self.myCrop2D(inputs)
-        output = self.conv2D1x1(input_crop)
+        input_crop = self.crop2D(inputs)
+        output = self.dense(input_crop)
         return output
 
     def get_config(self):
         config = super().get_config()
-        config.update({"cropping": self.cropping, "channel": self.channel})
+        config.update({
+        "cropping": self.cropping, 
+        "channel": self.channel,
+        "regL2": self.regL2,
+        })
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 class TimeCallBack(tf.keras.callbacks.Callback):
     def __init__(self):
         self.time = []
-        self.timetaken = time.process_time()
+        self.timetaken = time.time()
     
     def on_epoch_end(self, epoch, logs={}):
         self.time.append((epoch, np.around(time.time()-self.timetaken, 3)))
@@ -148,16 +157,21 @@ def calc_spline_values(x, grid, spline_order):
     Parameters
     ----------
     x : tf.Tensor
-        The input tensor (nD), with shape = [batch, h, w, c, ...]
+        The input nD tensor, with shape = [batch, h, w, ..., c]
     grid : tf.Tensor
-        The grid tensor (1D) with length (grid_size + 2 * spline_order + 1).
+        The grid 1D tensor with length (grid_size + 2 * spline_order + 1).
     spline_order : int
         The spline order.
 
     Returns: tf.Tensor
         B-spline bases tensor (n+1)D 
-        shape = [batch, h, w, c, ..., grid_size + spline_order].
-        B_ik === B_k(x_i)  
+        shape = [batch, h, w, , ..., c, grid_size + spline_order].
+        B_ik === B_k(x_i)
+
+    ex: if x is a 4D Tensor, output is a list of 4D Tensor, then stack to a 5D Tensor
+    output = [B0(x), B1(x), B2(x), ..., Bk(x)]
+    output = tf.stack(output, axis=-1)
+    code can be implemented simply by broadcasting
     """
     assert len(tf.shape(x)) >= 2
     
@@ -181,11 +195,11 @@ def calc_spline_values(x, grid, spline_order):
 def gaus_bspline3(x, h):
     """
     Gaussian approximation of B-spline order 3 (uniform grid)
-    knots = [0, h, 2h, 3h, 4h]
+    knots = [-2h,-h, 0, h,2h]
+    x: tf.Tensor, input nD tensor 
+    h: float, grid resolution.
     """
-    # x: input nD tensor 
-    # h: grid resolution. float
-    x = (x- 2*h) / (h / 1.7)
+    x = (x) / (h / 1.7)
     y = 0.667 * tf.math.exp(-0.5 * x**2)
     return y
 
@@ -204,68 +218,90 @@ class ParamGausACTF(keras.layers.Layer):
     
     approx:
     under uniform grids (knots): [x0, x1, x2, x3, ...] , x_{i+1}-x_i === h
-    B-Splinee order 3 function can be well-approximated by gaus(), which is easy and fast
+    B-Splinee order 3 function can be well-approximated by gaus_bspline3(), 
+    which is easy and fast
     then phi(x) is parameterized by 
     phi(x) = c0*G_i(x) + c1*G_i(x) + c2*G_i(x) + ...
     G_i(x) = gaus_bspline3(x-xi, h)
+
+    input:  nD Tensor, shape = [batch, h, w, ..., c]
+    output: nD Tensor, shape = [batch, h, w, ..., c]
+    actf_range: default = (0, 1.0), 
+        trainable activation funciton range, 
+        outside this range, the output is expontially decay to zero
+    num_basis: int, number of basis functions to use for trainable activation function 
+
+    if depthwised is False: 
+        output = phi(input), single fucntion phi() apply to input Tensor
+
+    if depthwised is True: 
+        different activation funcitons apply to differnt input channel, then stack them.
+
     """
     def __init__(self,
-                 base_actf,
-                 depthwised=False,
-                 grid_range=(0, 1.0),
-                 num_basis = 11, 
+                 depthwised=True,
+                 actf_range=(-1.0, 1.0),
+                 num_basis = 8, 
                  **kwargs):
         super(ParamGausACTF, self).__init__(**kwargs)
-        self.base_actf = base_actf
         self.depthwised = depthwised
-        self.grid_range = grid_range
+        self.actf_range = actf_range
         self.num_basis = num_basis
         assert self.num_basis >= 2
 
-        xL, xR = grid_range
+        xL, xR = actf_range
         uniform_grid = np.linspace(xL, xR, self.num_basis)
         self.grid_resolution = uniform_grid[1] - uniform_grid[0]
-        # build 1D grid tensor
+        # build 1D grid constant tensor
         self.grid = tf.constant(uniform_grid, dtype=tf.float32)
-        self.dense1 = keras.layers.Dense(units=1, use_bias=False)
 
     def build(self, input_shape):
         in_channel = input_shape[-1]
-        self.in_channel = in_channel
+        # dense layers to create trainable weights for trainable activation functions
+        # (inner degree of freedom)
+        self.denses = [
+            keras.layers.Dense(units=1, use_bias=False) for _ in range(in_channel)]
         
-        if self.depthwised:
-            self.actf_kernel = self.add_weight(
-                name="actf_kernel",
-                shape=(self.num_basis, self.in_channel),
-                initializer=keras.initializers.RandomNormal(stddev=1.0),
-                trainable=True,
-                #caching_device="GPU:0",
-                dtype=tf.float32,
-                )
-
     def call(self, inputs, *args, **kwrags):
         """
-        inputs: nD Tensor
+        inputs: nD Tensor, shape = [batch, h, w, ..., c]
+        Ax: (n+1)D Tensor, shape = [batch, h, w, ..., c, num_basis]
+        output: nD Tensor, shape = [bathc, h, w, ..., c]
         """
-        # expand dim for broadcasting 
-        # self.grid is 1D Tensor, x and Ax are (n+1)D Tensor
+        # inputs expand dim for broadcasting 
         x = tf.expand_dims(inputs, axis=-1)
         Ax = gaus_bspline3(x-self.grid, self.grid_resolution)
+
         if self.depthwised:
-            output = tf.einsum("...ik,ki->...i", Ax, self.actf_kernel)
+            # unstack on channel axis
+            tlist = tf.unstack(Ax, axis=-2)
+            output =[]
+            for i, t in enumerate(tlist):
+                # t shape = [batch, h, w, ... num_basis]
+                # t_out shape = [batch, h, w, ..., 1]
+                t_out = self.denses[i](t)
+                output.append(t_out)
+
+            output = tf.concat(output, axis=-1)
+
+            # do not use einsum, it is too slow
+            #output = tf.einsum("...ik,ki->...i", Ax, self.actf_kernel)
         else:
-            output = self.dense1(Ax)
+            output = self.denses[0](Ax)
             output = tf.reduce_mean(output, axis=-1)
-        output = output + keras.layers.Activation(self.base_actf)(inputs)
         return output
 
     def get_config(self):
         config = super(ParamGausACTF, self).get_config()
         config.update({
             "depthwised": self.depthwised,
-            "grid_range": self.grid_range,
+            "actf_range": self.actf_range,
             "num_basis": self.num_basis,
             })
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 class BSplineACTF(keras.layers.Layer):
@@ -273,12 +309,10 @@ class BSplineACTF(keras.layers.Layer):
     trainable activation functions using parameterized B-spline functions
     """
     def __init__(self, 
-                 out_channel=None, 
                  grid_size=5, 
                  spline_order=3,
                  grid_range=(-1.0,1.0), **kwargs):
         super(BSplineACTF, self).__init__(**kwargs)
-        self.out_channel = out_channel
         self.grid_size = grid_size
         self.spline_order = spline_order
         self.grid_range = grid_range
@@ -286,7 +320,7 @@ class BSplineACTF(keras.layers.Layer):
     def build(self, input_shape):
         in_channel = input_shape[-1]
         self.in_channel = in_channel
-        self.spline_basis_size = self.grid_size + self.spline_order
+        self.num_spline_basis = self.grid_size + self.spline_order
         bound = self.grid_range[1] - self.grid_range[0]
 
         # build 1D Tensor grid (extention) 
@@ -299,40 +333,40 @@ class BSplineACTF(keras.layers.Layer):
             initial_value=tf.cast(self.grid, dtype=tf.float32),
             trainable=False,
             dtype=tf.float32,
-            caching_device="GPU:0",
+            #caching_device="GPU:0",
             name="spline_grd",
             )
 
-        if self.out_channel is None:
-            kernel_shape = (self.spline_basis_size, self.in_channel)
-        else:
-            assert isinstance(self.out_channel, int)
-            kernel_shape = (self.spline_basis_size, self.in_channel, self.out_channel)
-
-        self.spline_kernel = self.add_weight(
-            name="spline_kernel",
-            shape=kernel_shape,
-            initializer=tf.keras.initializers.RandomNormal(0.1),
-            trainable=True,
-            caching_device="GPU:0",
-            dtype=tf.float32,
-            )
+        self.denses = [
+            keras.layers.Dense(units=1, use_bias=False) for _ in range(in_channel)]
 
     def call(self, inputs, *args, **kwargs):
-        Bik = calc_spline_values(inputs, self.grid, self.spline_order)
-        if self.out_channel is None:
-            spline_out = tf.einsum("...ik,ki->...i", Bik, self.spline_kernel)
-        else:
-            spline_out = tf.einsum("...ik,kij->...j", Bik, self.spline_kernel)
-        return spline_out
+        # Ax shape = [batch, h, w, ..., c, num_spline_basis]
+        Ax = calc_spline_values(inputs, self.grid, self.spline_order)
+        # unstack on channel axis
+        tlist = tf.unstack(Ax, axis=-2)
+        output =[]
+        for i, t in enumerate(tlist):
+            # t shape = [batch, h, w, ..., num_basis]
+            # t_out shape = [batch, h, w, ..., 1]
+            t_out = self.denses[i](t)
+            output.append(t_out)
+
+        # otuput shape = [batch, h, w, ..., c]
+        output = tf.concat(output, axis=-1)
+ 
+        return output
 
     def get_config(self):
         config = super(BSplineACTF, self).get_config()
         config.update({
-            "out_channel": self.out_channel,
             "grid_size": self.grid_size,
             "spline_order": self.spline_order, 
             "grid_range": self.grid_range})
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 def build_model(
@@ -341,11 +375,9 @@ def build_model(
     chans, 
     skips, 
     actfs, 
-    dilas=None, 
-    trainable_actfs=False,
-    depthwised=False,
-    grid_range=(0.0,1.0),
-    num_basis=11,
+    dilas,
+    enable_trainable_actfs=True,
+    tract_name='bspline',
     ):
     assert len(kerns)==len(chans)
     assert len(kerns)==len(skips)
@@ -368,14 +400,14 @@ def build_model(
             use_bias=True,
             kernel_regularizer=keras.regularizers.l2(1.0e-6),
             name="symconv_"+str(i))
-
-        if trainable_actfs and i != layerID[-1]:
-            actf_layer = ParamGausACTF(
-                base_actf=a,
-                grid_range=grid_range, 
-                num_basis=num_basis,
-                depthwised=depthwised,
-                )
+        
+        if enable_trainable_actfs and i!=layerID[-1]:
+            if tract_name == 'bspline':
+                actf_layer = BSplineACTF()
+            elif tract_name == 'gaus':
+                actf_layer = ParamGausACTF()
+            else:
+                print("{} no support".format(tract_name))
         else:
             actf_layer = keras.layers.Activation(a)
         
@@ -395,12 +427,37 @@ def build_model(
             out_tensor = outputs[out_layerID]
             cropping = sum(effective_kerns[inp_layerID:out_layerID])-(out_layerID-inp_layerID)
             cropping = cropping // 2
-            inp_tensor_crop = SkipConv(cropping, chans[i])(inp_tensor)
+            inp_tensor_crop = DenseCropSkip(cropping, chans[i])(inp_tensor)
             out_tensor_new = keras.layers.Add()([out_tensor, inp_tensor_crop])
             outputs[i+1] = out_tensor_new
     # 
     model = keras.Model(inputs=x, outputs=outputs[-1])
     return model
+
+
+def resize_to_model_output(model, inputs, labels):
+    _, h, w, c = inputs.shape
+    assert h==w
+    input_shape = (h, w, c)
+    output_shape = model.compute_output_shape((1, *input_shape)).as_list()[1:]
+    output_size = output_shape[0]
+    _, label_size, _, _ = labels.shape
+    if output_size < label_size:
+        c = (label_size-output_size)//2
+        labels = labels[:, c:-c, c:-c, :]
+    return labels
+
+
+def result_plots(imagesA, imagesB):
+    _, hA, _, _ = imagesA.shape
+    _, hB, _, _ = imagesB.shape
+    fig, axes = plt.subplots(nrows=3, ncols=5, figsize=(15,5))
+    for i in range(5):
+        axes[0, i].imshow(imagesA[i])
+        axes[1, i].imshow(imagesB[i])
+        axes[2, i].plot(imagesA[i, hA//2, :, 0], '-o')
+        axes[2, i].plot(imagesB[i, hB//2, :, 0], '-o')
+
 
 
 def netconfig():
@@ -412,15 +469,17 @@ def netconfig():
     SKIPS    = [-1, 0,-1, 2,-1, 4, 5, 4, 3, 2, 1,-1]
     ACTIVATIONS = ['softplus']*6 + ['linear']*6
     """
-    
+
     # resnet753 (small kernel CNN BKM)
+    #"""
     KERNELS =  [ 7, 5, 3, 7, 5, 3, 7, 5, 3, 7, 5, 3, 1]
     CHANNELS = [ 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1]
     #CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
     DILATIONS= [ 5, 3, 1, 5, 3, 1, 5, 3, 1, 5, 3, 1, 1]
     SKIPS    = [-1,-1, 0,-1,-1, 3,-1,-1, 6,-1,-1, 9, 0]
     ACTIVATIONS = ['relu']*12 + ['linear']
-   
+    #"""
+
     # resnetL21
     """
     KERNELS =  [21,21,21,21,21,21,21,21,21, 1]
@@ -437,13 +496,21 @@ def netconfig():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dbfile', type=str, default=None)
+    parser.add_argument('--testdbfile', type=str, default=None)
+    parser.add_argument('--save_dir', type=str, default="my_trained_MLmodels")
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--gpu_id', type=int, default=0)
     parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--lr', type=float, default=0.0005)
     parser.add_argument('--training', action='store_true')
+    parser.add_argument('--restore', action='store_true')
     parser.add_argument('--enable_trainable_actfs', action='store_true')
+    parser.add_argument('--tract_name', type=str, default='bspline')
     FLAGS, _ = parser.parse_known_args()
     
+    if not os.path.isdir(FLAGS.save_dir):
+        os.mkdir(FLAGS.save_dir)
+
     os.environ['CUDA_VISIBLE_DEVICES']=str(FLAGS.gpu_id)
 
     gpus = tf.config.list_physical_devices('GPU')
@@ -453,11 +520,7 @@ def main():
     # get network config
     kerns, chans, dilas, skips, actfs = netconfig()
     
-    trainable_actfs = False
-    if FLAGS.enable_trainable_actfs:
-        trainable_actfs = True
-
-    timetaken = TimeCallBack()
+    #timetaken = TimeCallBack()
     
     cnnModel = build_model(
         img_size=None, 
@@ -466,68 +529,76 @@ def main():
         skips=skips, 
         actfs=actfs,
         dilas=dilas,
-        trainable_actfs=trainable_actfs,
-        depthwised=False,
-        grid_range=(0.0,1.0),
-        num_basis=10,
+        enable_trainable_actfs=FLAGS.enable_trainable_actfs,
+        tract_name=FLAGS.tract_name,
         )
     
     cnnModel.summary()
-    opt = keras.optimizers.Adam(learning_rate=0.0005)
-    cnnModel.compile(loss='mse', optimizer=opt)
+
+    # define cost and optimizer
+    # TODO
+    # A bug when restoring checkpoint if optimizer is using Adam
+    # see details and workaround in 
+    # https://github.com/tensorflow/tensorflow/issues/33150
+    # https://gist.github.com/yoshihikoueno/4ff0694339f88d579bb3d9b07e609122
+    opt = keras.optimizers.Adam(
+        learning_rate=tf.Variable(FLAGS.lr),
+        beta_1=tf.Variable(0.9),
+        beta_2=tf.Variable(0.999),
+        epsilon=tf.Variable(1e-7))
+    opt.iterations
+    opt.decay = tf.Variable(0.0)
     
-    #configs = cnnModel.get_config()
-    #for layer_config in configs['layers']:
-    #    for k in layer_config.keys():
-    #        print(k, layer_config[k])
+    cnnModel.compile(loss='mse', optimizer=opt)
+    model_save_path = os.path.join(FLAGS.save_dir, "best_ckpt")
     
     try:
-        plot_model(cnnModel, to_file="./model_graph.png", show_shapes=True, show_layer_names=True)
+        plot_model(cnnModel, to_file="./model_graph.png", 
+            show_shapes=True, show_layer_names=True)
     except:
         pass
    
+    if FLAGS.restore:
+        load_status = cnnModel.load_weights(model_save_path)
+        load_status.assert_consumed()
+
     if FLAGS.dbfile is None:
         print("use fake data for training flow test")
         input_shape = (255, 255, 1)
         inputs = np.random.rand(100, *input_shape).astype(np.float32)
         labels = np.random.rand(100, *input_shape).astype(np.float32)
-        output_shape = cnnModel.compute_output_shape((1, *input_shape)).as_list()[1:]
-        in_size = input_shape[0]
-        out_size = output_shape[0]
-        if out_size == in_size:
-            labels_resize = labels
-        else:
-            i = (in_size-out_size)//2
-            labels_resized = labels[:, i:-i, i:-i, :]
 
     elif FLAGS.dbfile.endswith('npz'):
         data = np.load(FLAGS.dbfile, allow_pickle=True)
         print(list(data.keys()))
-        images = data['images']
-        vt_terms = data['vt_terms']
-        print(vt_terms)
-        inputs = np.expand_dims(images[:,:,:,1], axis=-1)
-        labels = np.expand_dims(images[:,:,:,0], axis=-1)
-        _, h, w, c = inputs.shape
-        assert h==w
-        input_shape = (h, w, c)
-        output_shape = cnnModel.compute_output_shape((1, *input_shape)).as_list()[1:]
-        out_size = output_shape[0]
-        i = (h - out_size)//2
-        labels_resized = labels[:, i:-i, i:-i, :]
-        #print(inputs.dtype, labels_resized.dtype)
+        inputs = data['inputs']
+        labels = data['labels']
         
     else:
         print("{} not support yet".format(FLAGS.dbfile))
         return 0
+
+    if FLAGS.testdbfile is not None:
+        testdata = np.load(FLAGS.testdbfile)
+        images = testdata['images']
+        Presist, vt0, _ = list(np.transpose(images, [3, 0, 1, 2]))
+        test_inputs = np.expand_dims(vt0, axis=-1)
+        test_labels = np.expand_dims(Presist, axis=-1)
+    else:
+        cid = np.random.choice(len(inputs), 5, replace=False)
+        test_inputs = inputs[cid]
+        test_labels = labels[cid]
     
-    print(inputs.shape, labels_resized.shape)
-    
+    labels = resize_to_model_output(cnnModel, inputs, labels)
+    test_labels = resize_to_model_output(cnnModel, test_inputs, test_labels)
+    print(inputs.shape, labels.shape)
+    print(test_inputs.shape, test_labels.shape)
+   
     if FLAGS.training:
         t0 = time.time()
         cnnModel.fit(
             x=inputs,
-            y=labels_resized,
+            y=labels,
             epochs=FLAGS.epochs,
             batch_size=FLAGS.batch_size,
             verbose=1,
@@ -537,12 +608,39 @@ def main():
         deltaT = time.time() - t0
 
         print("training completed")
-        print("  input shape = {}, output shape ={}, time elapsed={} seconds".format(
+        print("input={}, output={}, time elapsed={} seconds".format(
             inputs.shape, labels.shape, np.round(deltaT, 2)))
+
+        cnnModel.save_weights(model_save_path)
+        print("model weights are saved")
+
     else:
-        print("DO NOTHING")
+        print("No Training")
+    
+
+    fig, axes = plt.subplots(nrows=4, ncols=12, figsize=(15,5))
+    actf_i = 0
+    for lyr in cnnModel.layers:
+        if "gaus_actf" in lyr.name:
+            print(lyr.name)
+            arr = np.concatenate([l.numpy() for l in lyr.weights], axis=-1)
+            print(arr.shape)
+            _grid = np.linspace(-1.0, 1.0, 8)
+            x = np.linspace(-1.5, 1.5, 100)
+            basis_f = gaus_bspline3(x.reshape([-1,1])-_grid, 0.1)
+            actf_val = np.transpose(np.matmul(basis_f, arr), [1,0])
+            for j in range(4):
+                axes[j, actf_i].plot(x, actf_val[j], '-')
+                axes[j, actf_i].grid()
+                axes[j, actf_i].set_title(lyr.name)
+            actf_i += 1
+
+    y_pred = cnnModel.predict(test_inputs)
+    y_true = test_labels
+    result_plots(y_true, y_pred)
+
 
 
 main()
-
+plt.show()
     
