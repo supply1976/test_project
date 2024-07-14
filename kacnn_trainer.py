@@ -425,8 +425,8 @@ def netconfig():
     # resnet753-lite (small kernel CNN BKM)
     #"""
     KERNELS =  [ 7, 5, 3, 7, 5, 3, 7, 5, 3, 7, 5, 3, 1]
-    CHANNELS = [ 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1]
-    #CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
+    #CHANNELS = [ 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1]
+    CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
     DILATIONS= [ 5, 3, 1, 5, 3, 1, 5, 3, 1, 5, 3, 1, 1]
     SKIPS    = [-1,-1, 0,-1,-1, 3,-1,-1, 6,-1,-1, 9, 0]
     ACTIVATIONS = ['relu']*12 + ['linear']
@@ -496,14 +496,15 @@ def main():
     # see details and workaround in 
     # https://github.com/tensorflow/tensorflow/issues/33150
     # https://gist.github.com/yoshihikoueno/4ff0694339f88d579bb3d9b07e609122
-    opt = keras.optimizers.Adam(
-        learning_rate=tf.Variable(FLAGS.lr),
-        beta_1=tf.Variable(0.9),
-        beta_2=tf.Variable(0.999),
-        epsilon=tf.Variable(1e-7))
-    opt.iterations
-    opt.decay = tf.Variable(0.0)
+    #opt = keras.optimizers.Adam(
+    #    learning_rate=tf.Variable(FLAGS.lr),
+    #    beta_1=tf.Variable(0.9),
+    #    beta_2=tf.Variable(0.999),
+    #    epsilon=tf.Variable(1e-7))
+    #opt.iterations
+    #opt.decay = tf.Variable(0.0)
     
+    opt = keras.optimizers.Adam(learning_rate=FLAGS.lr)
     cnnModel.compile(loss='mse', optimizer=opt)
 
     model_save_path = os.path.join(FLAGS.save_dir, "best_ckpt")
@@ -535,6 +536,10 @@ def main():
         print(list(data.keys()))
         inputs = data['inputs']
         labels = data['labels']
+        if len(inputs.shape)==3:
+            inputs = np.expand_dims(inputs, axis=-1)
+        if len(labels.shape)==3:
+            labels = np.expand_dims(labels, axis=-1)
         
     else:
         print("{} not support yet".format(FLAGS.dbfile))
@@ -578,30 +583,31 @@ def main():
         print("No Training")
     
     # trained actf visualize
-    names = [lyr.name for lyr in cnnModel.layers if "bspline_actf" in lyr.name]
-    tractf_wts = [lyr.weights for lyr in cnnModel.layers if "bspline_actf" in lyr.name]
-    tractf_wts = [np.concatenate([x.numpy() for x in a], axis=-1) for a in tractf_wts]
-    xsamples = np.linspace(-1.0, 2.0, 100)
-    x = tf.expand_dims(tf.constant(xsamples, tf.float32), axis=0)
-    a, b = grid_range
-    a = a - spline_order * (b-a)/grid_intervals
-    b = b + spline_order * (b-a)/grid_intervals
-    grid = tf.constant(np.linspace(a, b, grid_intervals+7), tf.float32)
-    #Ax = calc_spline_values(x, grid, spline_order=3)
-    Ax = bspline3_gaus_approx(x, grid)
-    Ax = Ax.numpy()[0]
-    _, c = tractf_wts[0].shape
+    if FLAGS.enable_trainable_actfs:
+        names = [lyr.name for lyr in cnnModel.layers if "bspline_actf" in lyr.name]
+        tractf_wts = [lyr.weights for lyr in cnnModel.layers if "bspline_actf" in lyr.name]
+        tractf_wts = [np.concatenate([x.numpy() for x in a], axis=-1) for a in tractf_wts]
+        xsamples = np.linspace(-1.0, 2.0, 100)
+        x = tf.expand_dims(tf.constant(xsamples, tf.float32), axis=0)
+        a, b = grid_range
+        a = a - spline_order * (b-a)/grid_intervals
+        b = b + spline_order * (b-a)/grid_intervals
+        grid = tf.constant(np.linspace(a, b, grid_intervals+7), tf.float32)
+        #Ax = calc_spline_values(x, grid, spline_order=3)
+        Ax = bspline3_gaus_approx(x, grid)
+        Ax = Ax.numpy()[0]
+        _, c = tractf_wts[0].shape
 
-    fig, axes = plt.subplots(nrows=c, ncols=len(tractf_wts), sharey=True, figsize=(18,3))
-    if c==1:
-        axes = axes.reshape([1, -1])
-    for i, wt in enumerate(tractf_wts):
-        _, col = wt.shape
-        val = np.matmul(Ax, wt)
-        for j in range(col):
-            axes[j, i].plot(xsamples, val[:, j], '-')
-            axes[j, i].grid()
-        axes[0, i].set_title(names[i])
+        fig, axes = plt.subplots(nrows=c, ncols=len(tractf_wts), sharey=True, figsize=(18,3))
+        if c==1:
+            axes = axes.reshape([1, -1])
+        for i, wt in enumerate(tractf_wts):
+            _, col = wt.shape
+            val = np.matmul(Ax, wt)
+            for j in range(col):
+                axes[j, i].plot(xsamples, val[:, j], '-')
+                axes[j, i].grid()
+            axes[0, i].set_title(names[i])
 
     y_pred = cnnModel.predict(test_inputs)
     y_true = test_labels
