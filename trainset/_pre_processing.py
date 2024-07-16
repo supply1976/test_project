@@ -27,7 +27,7 @@ print(names.shape)
 images = np.stack([inputs, labels], axis=-1)
 print(images.shape)
 
-Lx = np.arange(0, 992-256, 100)
+Lx = np.arange(0, 992-256, 200)
 X, Y = np.meshgrid(Lx, Lx)
 boxes = list(zip(X.flatten(), Y.flatten()))
 
@@ -38,14 +38,19 @@ for (x0, y0) in boxes:
 
 clips = np.concatenate(clips, axis=0)
 
+res, = np.where(np.sum(clips[:,:,:,0], axis=(1,2)) >0)
+clips = clips[res]
+print(res)
 print(clips.shape, clips.dtype)
-    
+
+
 
 
 print(inputs.shape, inputs.dtype)
 d={}
-d['inputs']= clips[:,:,:,0]
-d['labels']= clips[:,:,:,1]
+#d['inputs']= clips[:,:,:,0]
+#d['labels']= clips[:,:,:,1]
+d['images'] = clips
 d['template_names']=names
 fn_out = "trainset_"+'x'.join(list(map(str, clips.shape)))+'.npz'
 np.savez(fn_out, **d)
