@@ -89,14 +89,25 @@ class MySymConv2D(keras.layers.Conv2D):
     def __init__(self, **kwargs):
         super(MySymConv2D, self).__init__(**kwargs)
 
-    def call(self, inp):
-        self.sym_kern = _makeSymConvKern(self.kernel)
-        padding = self.padding.upper()
-        output = tf.nn.conv2d(inp, self.sym_kern, strides=[1,1,1,1], padding=padding)
-        if self.use_bias:
-            output = tf.nn.bias_add(output, self.bias)
-        return output
+    def call(self, inputs):
+        # overwrite the call method
+        self.sym_kernel = _makeSymConvKern(self.kernel, mode='XYTU')
+        #actf_name = self.get_config()['activation']
+        outputs = tf.keras.backend.conv2d(
+            inputs, 
+            self.sym_kernel,
+            strides=self.strides,
+            padding=self.padding,
+            data_format=self.data_format,
+            dilation_rate=self.dilation_rate)
 
+        if self.use_bias:
+            outputs - tf.keras.backend.bias_add(outputs, self.bias)
+
+        if self.activation is not None:
+            outputs = self.activation(outputs)
+        
+        return outputs
 
 
 def build_model():
