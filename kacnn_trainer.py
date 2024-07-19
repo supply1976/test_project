@@ -2,7 +2,7 @@ import os, sys, logging, argparse
 import numpy as np
 import pandas as pd
 import time
-os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+#os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.utils import plot_model
@@ -287,18 +287,15 @@ class BSplineACTF(keras.layers.Layer):
             Ax = bspline3_gaus_approx(inputs, self.grid)
         else:
             Ax = calc_spline_values(inputs, self.grid, self.spline_order)
-        
-        if self.depthwised:
-            # unstack on channel axis
-            tlist = tf.unstack(Ax, axis=-2)
-            output =[]
-            for i, t in enumerate(tlist):
-                t_out = self.denses[i](t)
-                output.append(t_out)
-            output = tf.concat(output, axis=-1)
-        else:
-            output = self.denses[0](Ax)
-            output = tf.reduce_mean(output, axis=-1)
+
+        # unstack on channel axis
+        tlist = tf.unstack(Ax, axis=-2)
+        output =[]
+        for i, t in enumerate(tlist):
+            j = i if self.depthwised else 0
+            t_out = self.denses[j](t)
+            output.append(t_out)
+        output = tf.concat(output, axis=-1)
         return output
 
     def get_config(self):
@@ -422,24 +419,15 @@ def netconfig():
     ACTIVATIONS = ['softplus']*6 + ['linear']*6
     """
 
-    # resnet753-lite (small kernel CNN BKM)
+    # resnet753 (small kernel CNN BKM) and resnet753-lite
     #"""
     KERNELS =  [ 7, 5, 3, 7, 5, 3, 7, 5, 3, 7, 5, 3, 1]
-    #CHANNELS = [ 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1]
-    CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
+    CHANNELS = [ 8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 4, 1]
+    #CHANNELS = [16,16,16,16,16,16, 8, 8, 8, 8, 8, 8, 1]
     DILATIONS= [ 5, 3, 1, 5, 3, 1, 5, 3, 1, 5, 3, 1, 1]
     SKIPS    = [-1,-1, 0,-1,-1, 3,-1,-1, 6,-1,-1, 9, 0]
     ACTIVATIONS = ['relu']*12 + ['linear']
     #"""
-
-    # resnetL21
-    """
-    KERNELS =  [19,21,21,19,21,21,21,21,21, 1]
-    CHANNELS = [ 2, 2, 2, 2, 2, 2, 2, 2, 2, 1]
-    DILATIONS= None
-    SKIPS    = [-1,-1, 0,-1,-1, 3,-1,-1, 6, 0]
-    ACTIVATIONS = ['relu']*9 + ['linear']*1
-    """
 
     return (KERNELS, CHANNELS, DILATIONS, SKIPS, ACTIVATIONS)
 
@@ -452,7 +440,7 @@ def main():
     parser.add_argument('--save_dir', type=str, default="my_trained_MLmodels")
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--gpu_id', type=int, default=0)
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=0.0005)
     parser.add_argument('--training', action='store_true')
     parser.add_argument('--restore', action='store_true')
@@ -533,9 +521,8 @@ def main():
 
     elif FLAGS.dbfile.endswith('npz'):
         data = np.load(FLAGS.dbfile, allow_pickle=True)
-        print(list(data.keys()))
-        inputs = data['inputs']
-        labels = data['labels']
+        images = data['images']
+        inputs, labels = np.split(images, 2, axis=-1)
         if len(inputs.shape)==3:
             inputs = np.expand_dims(inputs, axis=-1)
         if len(labels.shape)==3:
@@ -581,7 +568,16 @@ def main():
 
     else:
         print("No Training")
-    
+
+    y_pred = cnnModel.predict(test_inputs)
+    y_true = test_labels
+    y_pred_train = cnnModel.predict(inputs)
+    y_true_train = labels
+    PSNR_train = tf.reduce_mean(tf.image.psnr(y_true_train, y_pred_train, max_val=1))
+    print(PSNR_train)
+
+    result_plots(y_true, y_pred)
+
     # trained actf visualize
     if FLAGS.enable_trainable_actfs:
         names = [lyr.name for lyr in cnnModel.layers if "bspline_actf" in lyr.name]
@@ -608,12 +604,6 @@ def main():
                 axes[j, i].plot(xsamples, val[:, j], '-')
                 axes[j, i].grid()
             axes[0, i].set_title(names[i])
-
-    y_pred = cnnModel.predict(test_inputs)
-    y_true = test_labels
-    result_plots(y_true, y_pred)
-
-
 
 main()
 plt.show()
