@@ -27,7 +27,9 @@ print(names.shape)
 images = np.stack([inputs, labels], axis=-1)
 print(images.shape)
 
-Lx = np.arange(0, 992-256, 200)
+#Lx = np.arange(0, 992-256, 80)
+#Lx = np.arange(0, 992-256, 200)
+Lx = np.arange(0, 992-256, 100)
 X, Y = np.meshgrid(Lx, Lx)
 boxes = list(zip(X.flatten(), Y.flatten()))
 
@@ -38,7 +40,7 @@ for (x0, y0) in boxes:
 
 clips = np.concatenate(clips, axis=0)
 
-res, = np.where(np.sum(clips[:,:,:,0], axis=(1,2)) >0)
+res, = np.where(np.sum(clips[:,:,:,0], axis=(1,2)) >1)
 clips = clips[res]
 print(res)
 print(clips.shape, clips.dtype)
